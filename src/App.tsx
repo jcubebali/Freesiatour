@@ -173,44 +173,23 @@ export default function App() {
             <div className="max-w-md mx-auto relative pointer-events-auto">
               <nav className="h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl flex items-center justify-around rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/20 dark:border-slate-800/50 relative overflow-visible">
                 
-                {/* Active Indicator Background (The "Bump") */}
+                {/* Simple Sliding Indicator */}
                 <motion.div 
-                  className="absolute top-0 h-full flex items-start justify-center pointer-events-none"
+                  className="absolute bottom-2 left-0 h-1 w-[20%] flex justify-center pointer-events-none"
                   initial={false}
                   animate={{ 
-                    left: `${
-                      screen === 'home' ? '0%' : 
-                      screen === 'map' ? '20%' : 
-                      screen === 'qr' ? '40%' :
-                      screen === 'history' ? '60%' :
-                      screen === 'profile' ? '80%' :
-                      '0%'
-                    }`,
-                    width: '20%'
+                    x: `${
+                      screen === 'home' ? 0 : 
+                      screen === 'map' ? 100 : 
+                      screen === 'qr' ? 200 :
+                      screen === 'history' ? 300 :
+                      screen === 'profile' ? 400 :
+                      0
+                    }%`
                   }}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 >
-                  <div className="relative w-full h-full flex justify-center">
-                    {/* The actual bump shape */}
-                    <div className="absolute -top-4 w-16 h-16 bg-white dark:bg-slate-900 rounded-full border-t border-white/20 dark:border-slate-800/50 shadow-[-10px_0_10px_-10px_rgba(0,0,0,0.1),10px_0_10px_-10px_rgba(0,0,0,0.1)]" />
-                    {/* Inverted corners (left) */}
-                    <div className="absolute -top-[1px] -left-8 w-8 h-8 bg-transparent rounded-full pointer-events-none" 
-                      style={{ 
-                        boxShadow: `15px -15px 0 0 ${isDarkMode ? '#0f172a' : 'white'}`,
-                        clipPath: 'inset(0 0 50% 50%)' 
-                      }} 
-                    />
-                    {/* Inverted corners (right) */}
-                    <div className="absolute -top-[1px] -right-8 w-8 h-8 bg-transparent rounded-full pointer-events-none" 
-                      style={{ 
-                        boxShadow: `-15px -15px 0 0 ${isDarkMode ? '#0f172a' : 'white'}`,
-                        clipPath: 'inset(0 50% 50% 0)' 
-                      }} 
-                    />
-                    
-                    {/* Gradient Glow */}
-                    <div className="absolute -top-2 w-12 h-12 bg-gradient-to-br from-pink-pekat to-ungu-pekat rounded-2xl opacity-20 blur-lg" />
-                  </div>
+                  <div className="w-1.5 h-1.5 bg-pink-pekat rounded-full shadow-[0_0_10px_rgba(230,0,126,0.5)]" />
                 </motion.div>
 
                 {/* Nav Items */}
@@ -232,7 +211,7 @@ export default function App() {
                     >
                       <motion.div
                         animate={{ 
-                          y: isActive ? -18 : 0,
+                          y: isActive ? -2 : 0,
                           scale: isActive ? 1.1 : 1,
                           color: isActive ? '#E6007E' : '#94a3b8'
                         }}
