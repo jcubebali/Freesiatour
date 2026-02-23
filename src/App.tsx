@@ -39,6 +39,7 @@ export default function App() {
     const saved = localStorage.getItem('theme');
     return saved === 'dark';
   });
+  const [lang, setLang] = useState<'en' | 'id'>('en');
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -100,6 +101,8 @@ export default function App() {
               isDarkMode={isDarkMode}
               toggleDarkMode={toggleDarkMode}
               onAboutClick={() => setScreen('about')}
+              lang={lang}
+              toggleLang={() => setLang(lang === 'en' ? 'id' : 'en')}
             />
           )}
 
@@ -248,7 +251,9 @@ function HomeScreen({
   destinations,
   isDarkMode,
   toggleDarkMode,
-  onAboutClick
+  onAboutClick,
+  lang,
+  toggleLang
 }: { 
   onTourClick: (tour: Tour) => void;
   searchQuery: string;
@@ -257,13 +262,15 @@ function HomeScreen({
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   onAboutClick: () => void;
+  lang: 'en' | 'id';
+  toggleLang: () => void;
 }) {
   return (
     <motion.div 
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="flex-1 flex flex-col p-6 pb-20 overflow-y-auto relative"
+      className="flex-1 flex flex-col overflow-y-auto relative"
       style={{ 
         backgroundImage: `${isDarkMode ? 'linear-gradient(rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.7))' : 'linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.4))'}, url(https://res.cloudinary.com/dbckdslrw/image/upload/v1771815543/hero-bg_kratyi.webp)`,
         backgroundSize: 'cover',
@@ -271,7 +278,7 @@ function HomeScreen({
         backgroundAttachment: 'fixed'
       }}
     >
-      <header className="sticky -top-6 -mx-6 -mb-20 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-slate-50 dark:border-slate-800">
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-slate-50 dark:border-slate-800">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
             <img 
@@ -283,15 +290,23 @@ function HomeScreen({
           </div>
           <span className="font-display font-bold text-xl text-ungu-pekat dark:text-ungu-muda">Freesiatour</span>
         </div>
-        <button 
-          onClick={toggleDarkMode}
-          className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors"
-        >
-          {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
+        <div className="flex items-center space-x-2">
+          <button 
+            onClick={toggleLang}
+            className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors font-bold text-xs uppercase"
+          >
+            {lang}
+          </button>
+          <button 
+            onClick={toggleDarkMode}
+            className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors"
+          >
+            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+        </div>
       </header>
 
-      <div className="pt-20">
+      <div className="p-6 pb-20">
         <div className="mb-8">
           <h2 className="dark:text-white">Where do you <br />want to go?</h2>
           <div className="mt-6 relative">
