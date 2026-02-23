@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -267,19 +267,39 @@ function HomeScreen({
   lang: 'en' | 'id';
   toggleLang: () => void;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (scrollRef.current) {
+        const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+        if (scrollLeft + clientWidth >= scrollWidth - 10) {
+          scrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          scrollRef.current.scrollBy({ left: clientWidth * 0.85, behavior: 'smooth' });
+        }
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <motion.div 
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       className="flex-1 flex flex-col overflow-y-auto relative"
-      style={{ 
-        backgroundImage: `${isDarkMode ? 'linear-gradient(rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.7))' : 'linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.4))'}, url(https://res.cloudinary.com/dbckdslrw/image/upload/v1771815543/hero-bg_kratyi.webp)`,
-        backgroundSize: 'cover',
-        backgroundPosition: '45% center',
-        backgroundAttachment: 'fixed'
-      }}
     >
+      <div className="absolute top-0 left-0 right-0 h-[100vh] pointer-events-none z-0">
+        <img 
+          src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771815543/hero-bg_kratyi.webp" 
+          alt="Background" 
+          className="w-full h-full object-cover object-[45%_center]"
+          referrerPolicy="no-referrer"
+        />
+        <div className={`absolute inset-0 ${isDarkMode ? 'bg-slate-900/70' : 'bg-white/40'}`} />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white dark:to-slate-900" />
+      </div>
       <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-slate-50 dark:border-slate-800">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
@@ -310,7 +330,7 @@ function HomeScreen({
         </div>
       </header>
 
-      <div className="p-6 pb-20">
+      <div className="p-6 pt-64 pb-20 relative z-10">
         <div className="mb-8">
           <h2 className="dark:text-white">{lang === 'en' ? <>Where do you <br />want to go?</> : <>Ke mana Anda <br />ingin pergi?</>}</h2>
           <div className="mt-6 relative">
@@ -367,37 +387,42 @@ function HomeScreen({
           <button className="text-pink-pekat font-bold text-sm">{lang === 'en' ? 'See All' : 'Lihat Semua'}</button>
         </div>
 
-        {destinations.map((tour) => (
-          <motion.div 
-            key={tour.id}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => onTourClick(tour)}
-            className="flex items-center p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-          >
-            <div className="w-16 h-16 rounded-xl overflow-hidden mr-4">
-              <img src={tour.image} alt={tour.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-bold text-hitam-pekat dark:text-white">{tour.title}</h4>
-              <div className="flex items-center text-abu-abu dark:text-slate-400 text-xs mt-1">
-                <MapPin size={12} className="mr-1" />
-                {tour.location}
+        <div 
+          ref={scrollRef}
+          className="flex overflow-x-auto pb-4 -mx-6 px-6 space-x-4 snap-x snap-mandatory hide-scrollbar"
+        >
+          {destinations.map((tour) => (
+            <motion.div 
+              key={tour.id}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => onTourClick(tour)}
+              className="flex-shrink-0 w-[85%] flex items-center p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer snap-center"
+            >
+              <div className="w-16 h-16 rounded-xl overflow-hidden mr-4 flex-shrink-0">
+                <img src={tour.image} alt={tour.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
               </div>
-            </div>
-            <div className="text-right">
-              <div className="font-bold text-pink-pekat">${tour.price}</div>
-              <div className="flex items-center justify-end text-xs text-oren-prosess mt-1">
-                <Star size={12} fill="currentColor" className="mr-1" />
-                {tour.rating}
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-hitam-pekat dark:text-white truncate">{tour.title}</h4>
+                <div className="flex items-center text-abu-abu dark:text-slate-400 text-xs mt-1">
+                  <MapPin size={12} className="mr-1 flex-shrink-0" />
+                  <span className="truncate">{tour.location}</span>
+                </div>
               </div>
-            </div>
-          </motion.div>
-        ))}
+              <div className="text-right ml-2 flex-shrink-0">
+                <div className="font-bold text-pink-pekat">${tour.price}</div>
+                <div className="flex items-center justify-end text-xs text-oren-prosess mt-1">
+                  <Star size={12} fill="currentColor" className="mr-1" />
+                  {tour.rating}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
       </div>
 
-      <div className="mt-8 p-4 bg-ungu-pekat rounded-3xl text-white flex items-center justify-between">
+      <div className="mt-8 p-4 bg-ungu-pekat rounded-3xl text-white flex items-center justify-between relative z-10 mx-6">
         <div>
           <div className="text-xs opacity-60 uppercase tracking-widest font-bold mb-1">{lang === 'en' ? 'Contact Us' : 'Hubungi Kami'}</div>
           <div className="font-bold">+62 896-6114-1114</div>
@@ -409,7 +434,7 @@ function HomeScreen({
 
       <button 
         onClick={onAboutClick}
-        className="mt-4 w-full p-4 bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 flex items-center justify-between group"
+        className="mt-4 w-[calc(100%-3rem)] mx-6 mb-24 p-4 bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 flex items-center justify-between group relative z-10"
       >
         <div className="flex items-center space-x-4">
           <div className="w-10 h-10 bg-pink-pekat/10 rounded-xl flex items-center justify-center text-pink-pekat">
