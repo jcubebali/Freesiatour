@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Poppins", sans-serif;
+  
+  /* Primary Colors */
+  --color-pink-pekat: #E6007E;
+  --color-pink-medium: #F380BF;
+  --color-pink-muda: #F8B3D8;
+  
+  --color-ungu-pekat: #663398;
+  --color-ungu-medium: #9470B7;
+  --color-ungu-muda: #D1C2E0;
+  
+  --color-hijau-pekat: #6B9C09;
+  --color-hijau-medium: #97BA53;
+  --color-hijau-muda: #D3E1B5;
+  
+  --color-hitam-pekat: #3A3A3A;
+  --color-abu-abu: #B1B1B1;
+  
+  /* Accent Colors */
+  --color-merah-error: #D33434;
+  --color-oren-prosess: #E87230;
+  
+  /* Custom Utilities */
+  --background-gradient-primary: linear-gradient(to right, #E6007E, #663398);
+}
+
+@layer base {
+  body {
+    @apply font-sans text-hitam-pekat bg-slate-50;
+  }
+  
+  h1 { @apply font-display font-bold text-[48px] leading-tight; }
+  h2 { @apply font-display font-bold text-[36px] leading-tight; }
+  h3 { @apply font-display font-semibold text-[24px] leading-tight; }
+}
+
+@utility text-body-1 { font-family: var(--font-sans); font-weight: 500; font-size: 20px; }
+@utility text-body-2 { font-family: var(--font-sans); font-weight: 400; font-size: 16px; }
+@utility text-small { font-family: var(--font-sans); font-weight: 400; font-size: 14px; }
+@utility text-button { font-family: var(--font-sans); font-weight: 500; font-size: 24px; }
+
+.btn-primary {
+  @apply bg-[linear-gradient(to_right,#E6007E,#663398)] text-white rounded-full px-8 py-4 text-button transition-all hover:opacity-90 active:scale-95 flex items-center justify-center;
+}
+
+.btn-secondary {
+  @apply bg-white border-2 border-pink-pekat text-pink-pekat rounded-full px-8 py-4 text-button transition-all hover:bg-pink-pekat hover:text-white active:scale-95 flex items-center justify-center;
+}
+
+.glass-card {
+  @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-sm;
+}
+
+.mobile-container {
+  @apply w-[65%] mx-auto h-screen bg-white shadow-2xl relative overflow-hidden flex flex-col;
+}
