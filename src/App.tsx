@@ -201,6 +201,8 @@ function SplashScreen({ onContinue }: { onContinue: () => void }) {
                   alt="Freesiatour Logo" 
                   className="w-full h-full object-contain p-4"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
+                  decoding="async"
                 />
              </div>
           </motion.div>
@@ -286,6 +288,8 @@ function HomeScreen({
               alt="Freesiatour Logo" 
               className="w-full h-full object-contain p-1"
               referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
             />
           </div>
           <span className="font-display font-bold text-xl text-ungu-pekat dark:text-ungu-muda">Freesiatour</span>
@@ -308,12 +312,12 @@ function HomeScreen({
 
       <div className="p-6 pb-20">
         <div className="mb-8">
-          <h2 className="dark:text-white">Where do you <br />want to go?</h2>
+          <h2 className="dark:text-white">{lang === 'en' ? <>Where do you <br />want to go?</> : <>Ke mana Anda <br />ingin pergi?</>}</h2>
           <div className="mt-6 relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-abu-abu" size={20} />
             <input 
               type="text" 
-              placeholder="Search destination..."
+              placeholder={lang === 'en' ? "Search destination..." : "Cari tujuan..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-ungu-muda dark:text-white transition-all"
@@ -331,7 +335,7 @@ function HomeScreen({
             <div className="text-hijau-medium text-sm">of 50</div>
           </div>
           <div className="z-10">
-            <div className="text-hijau-medium text-xs uppercase tracking-wider font-bold">Destinations</div>
+            <div className="text-hijau-medium text-xs uppercase tracking-wider font-bold">{lang === 'en' ? 'Destinations' : 'Destinasi'}</div>
             <div className="font-bold text-hijau-pekat">Indonesia</div>
           </div>
           <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-hijau-pekat/5 rounded-full" />
@@ -343,6 +347,8 @@ function HomeScreen({
             alt="Featured" 
             className="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-110"
             referrerPolicy="no-referrer"
+            loading="lazy"
+            decoding="async"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           <div className="absolute bottom-4 left-4 text-white">
@@ -357,8 +363,8 @@ function HomeScreen({
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-xl dark:text-white">Best Destinations</h3>
-          <button className="text-pink-pekat font-bold text-sm">See All</button>
+          <h3 className="font-bold text-xl dark:text-white">{lang === 'en' ? 'Best Destinations' : 'Destinasi Terbaik'}</h3>
+          <button className="text-pink-pekat font-bold text-sm">{lang === 'en' ? 'See All' : 'Lihat Semua'}</button>
         </div>
 
         {destinations.map((tour) => (
@@ -369,7 +375,7 @@ function HomeScreen({
             className="flex items-center p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
           >
             <div className="w-16 h-16 rounded-xl overflow-hidden mr-4">
-              <img src={tour.image} alt={tour.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <img src={tour.image} alt={tour.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
             </div>
             <div className="flex-1">
               <h4 className="font-bold text-hitam-pekat dark:text-white">{tour.title}</h4>
@@ -393,7 +399,7 @@ function HomeScreen({
 
       <div className="mt-8 p-4 bg-ungu-pekat rounded-3xl text-white flex items-center justify-between">
         <div>
-          <div className="text-xs opacity-60 uppercase tracking-widest font-bold mb-1">Contact Us</div>
+          <div className="text-xs opacity-60 uppercase tracking-widest font-bold mb-1">{lang === 'en' ? 'Contact Us' : 'Hubungi Kami'}</div>
           <div className="font-bold">+62 896-6114-1114</div>
         </div>
         <button className="w-12 h-12 bg-pink-pekat rounded-2xl flex items-center justify-center shadow-lg shadow-pink-pekat/40">
@@ -410,8 +416,8 @@ function HomeScreen({
             <Info size={20} />
           </div>
           <div className="text-left">
-            <div className="font-bold text-hitam-pekat dark:text-white">About Freesiatour</div>
-            <div className="text-xs text-abu-abu dark:text-slate-400">Our Story & Mission</div>
+            <div className="font-bold text-hitam-pekat dark:text-white">{lang === 'en' ? 'About Freesiatour' : 'Tentang Freesiatour'}</div>
+            <div className="text-xs text-abu-abu dark:text-slate-400">{lang === 'en' ? 'Our Story & Mission' : 'Cerita & Misi Kami'}</div>
           </div>
         </div>
         <ArrowRight size={18} className="text-abu-abu group-hover:text-pink-pekat transition-colors" />
@@ -434,6 +440,8 @@ function DetailsScreen({ tour, onBack, onBook }: { tour: Tour; onBack: () => voi
           alt={tour.title} 
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
+          loading="lazy"
+          decoding="async"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-white dark:to-slate-900" />
         
@@ -649,7 +657,7 @@ function BookingScreen({ tour, onBack, onSuccess }: { tour: Tour; onBack: () => 
 
       <form onSubmit={handleSubmit} className="p-6 space-y-6">
         <div className="bg-ungu-muda/10 dark:bg-ungu-pekat/5 p-4 rounded-2xl flex items-center space-x-4 mb-2">
-          <img src={tour.image} alt={tour.title} className="w-16 h-16 rounded-xl object-cover" referrerPolicy="no-referrer" />
+          <img src={tour.image} alt={tour.title} className="w-16 h-16 rounded-xl object-cover" referrerPolicy="no-referrer" loading="lazy" />
           <div>
             <div className="font-bold text-hitam-pekat dark:text-white">{tour.title}</div>
             <div className="text-xs text-pink-pekat font-bold">${tour.price} / person</div>
@@ -772,6 +780,7 @@ function AboutScreen({ onBack }: { onBack: () => void }) {
             alt="Freesiatour Logo" 
             className="w-full h-full object-contain p-4"
             referrerPolicy="no-referrer"
+            loading="lazy"
           />
         </div>
 
