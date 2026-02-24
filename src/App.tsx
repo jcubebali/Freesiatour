@@ -529,10 +529,10 @@ function HomeScreen({
           </div>
 
           {/* Traveler Image (Static) */}
-          <div className="absolute inset-0 flex items-end justify-center pointer-events-none">
-            <div className="relative h-[80%] w-full flex justify-center transform translate-y-4">
+          <div className="absolute inset-0 flex items-end justify-start pointer-events-none">
+            <div className="relative h-[80%] w-full flex justify-start pl-4 md:pl-12 transform translate-y-4">
               <motion.img 
-                src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771870914/grok-image-6586278a-e917-486c-b94c-26e4cf71da00-Photoroom_oo6ai2.png" 
+                src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771899527/grok-image-6586278a-e917-486c-b94c-26e4cf71da00_2-fotor-bg-remover-20260224101231_cv61nk.png" 
                 alt="Traveler" 
                 className="h-full object-contain object-bottom"
                 referrerPolicy="no-referrer"
