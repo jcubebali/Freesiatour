@@ -73,3 +73,42 @@ export const DESTINATIONS = [
     lng: 112.9530
   }
 ];
+
+export const HERO_SLIDES = [
+  {
+    id: 1,
+    bg: 'https://picsum.photos/seed/indonesia/1920/1080',
+    title: 'INDONESIA',
+    badge: '14 DAYS\nALL INCLUSIVE\n$1399',
+  },
+  {
+    id: 2,
+    bg: 'https://picsum.photos/seed/norway/1920/1080',
+    title: 'NORWAY',
+    badge: '1 WEEK\nADVENTURE\n$899',
+  },
+  {
+    id: 3,
+    bg: 'https://picsum.photos/seed/thailand/1920/1080',
+    title: 'THAILAND',
+    badge: '12 DAYS\nINCL. FLIGHTS\n$1699',
+  },
+  {
+    id: 4,
+    bg: 'https://picsum.photos/seed/iceland/1920/1080',
+    title: 'ICELAND',
+    badge: '5 DAYS\nADVENTURE\n$979',
+  },
+  {
+    id: 5,
+    bg: 'https://picsum.photos/seed/peru/1920/1080',
+    title: 'PERU',
+    badge: '14 DAYS\nHIKING TRIP\n$1399',
+  },
+  {
+    id: 6,
+    bg: 'https://picsum.photos/seed/germany/1920/1080',
+    title: 'GERMANY',
+    badge: '9 DAYS\nADVENTURE\n$799',
+  },
+];

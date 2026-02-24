@@ -356,29 +356,16 @@ function HomeScreen({
   lang: 'en' | 'id';
   toggleLang: () => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const scrollCarousel = (direction: 'left' | 'right') => {
-    if (scrollRef.current) {
-      const { clientWidth } = scrollRef.current;
-      const scrollAmount = direction === 'left' ? -clientWidth * 0.85 : clientWidth * 0.85;
-      scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-    }
-  };
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (scrollRef.current) {
-        const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
-        if (scrollLeft + clientWidth >= scrollWidth - 10) {
-          scrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-        } else {
-          scrollRef.current.scrollBy({ left: clientWidth * 0.85, behavior: 'smooth' });
-        }
-      }
-    }, 3000);
+      setCurrentIndex((prev) => (prev + 1) % destinations.length);
+    }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [destinations.length]);
+
+  const currentTour = destinations[currentIndex];
 
   return (
     <motion.div 
@@ -485,7 +472,7 @@ function HomeScreen({
             <motion.button 
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={() => scrollCarousel('left')}
+              onClick={() => setCurrentIndex((prev) => (prev - 1 + destinations.length) % destinations.length)}
               className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-pink-pekat hover:text-white dark:hover:bg-pink-pekat transition-colors"
             >
               <ChevronLeft size={16} />
@@ -493,7 +480,7 @@ function HomeScreen({
             <motion.button 
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={() => scrollCarousel('right')}
+              onClick={() => setCurrentIndex((prev) => (prev + 1) % destinations.length)}
               className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-pink-pekat hover:text-white dark:hover:bg-pink-pekat transition-colors"
             >
               <ChevronRight size={16} />
@@ -501,36 +488,99 @@ function HomeScreen({
           </div>
         </div>
 
-        <div 
-          ref={scrollRef}
-          className="flex overflow-x-auto pb-4 -mx-6 px-6 space-x-4 snap-x snap-mandatory hide-scrollbar"
-        >
-          {destinations.map((tour) => (
-            <motion.div 
-              key={tour.id}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => onTourClick(tour)}
-              className="flex-shrink-0 w-[85%] flex items-center p-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer snap-center"
+        <div className="relative h-[400px] -mx-6 overflow-hidden bg-black group cursor-pointer" onClick={() => onTourClick(currentTour)}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentTour.id}
+              initial={{ opacity: 0, scale: 1.1 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="absolute inset-0"
             >
-              <div className="w-16 h-16 rounded-xl overflow-hidden mr-4 flex-shrink-0">
-                <img src={tour.image} alt={tour.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-bold text-hitam-pekat dark:text-white truncate">{tour.title}</h4>
-                <div className="flex items-center text-abu-abu dark:text-slate-400 text-xs mt-1">
-                  <MapPin size={12} className="mr-1 flex-shrink-0" />
-                  <span className="truncate">{tour.location}</span>
+              <img 
+                src={currentTour.image} 
+                alt={currentTour.title} 
+                className="w-full h-full object-cover opacity-70"
+                referrerPolicy="no-referrer"
+              />
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Large Background Text */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentTour.title}
+                initial={{ y: 50, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -50, opacity: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                className="text-center"
+              >
+                <div className="text-white/80 text-[10px] uppercase tracking-[0.3em] font-bold mb-2">
+                  {lang === 'en' ? 'Your Next Vacation In' : 'Liburan Anda Berikutnya Di'}
                 </div>
+                <h2 className="text-white text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none">
+                  {currentTour.title}
+                </h2>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Traveler Image (Static) */}
+          <div className="absolute inset-0 flex items-end justify-center pointer-events-none">
+            <div className="relative h-[80%] w-full flex justify-center transform translate-y-4">
+              <motion.img 
+                src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771870914/grok-image-6586278a-e917-486c-b94c-26e4cf71da00-Photoroom_oo6ai2.png" 
+                alt="Traveler" 
+                className="h-full object-contain object-bottom"
+                referrerPolicy="no-referrer"
+                animate={{ 
+                  y: [0, -4, 0, -4, 0],
+                  x: [0, -1, 0, 1, 0],
+                  rotate: [0, -0.5, 0, 0.5, 0]
+                }}
+                transition={{ 
+                  repeat: Infinity, 
+                  duration: 1.2,
+                  ease: "easeInOut"
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Badge */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`badge-${currentTour.id}`}
+              initial={{ scale: 0, rotate: -20 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={{ scale: 0, rotate: 20 }}
+              className="absolute top-6 right-6 w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center text-center p-2 shadow-2xl border-4 border-black/10"
+            >
+              <div className="text-[10px] font-black leading-tight uppercase">
+                {lang === 'en' ? '14 Days' : '14 Hari'}
               </div>
-              <div className="text-right ml-2 flex-shrink-0">
-                <div className="font-bold text-pink-pekat">${tour.price}</div>
-                <div className="flex items-center justify-end text-xs text-oren-prosess mt-1">
-                  <Star size={12} fill="currentColor" className="mr-1" />
-                  {tour.rating}
-                </div>
+              <div className="text-[8px] font-bold opacity-60 uppercase leading-tight">
+                {lang === 'en' ? 'All Inclusive' : 'Semua Termasuk'}
+              </div>
+              <div className="text-sm font-black text-pink-pekat mt-1">
+                ${currentTour.price}
               </div>
             </motion.div>
-          ))}
+          </AnimatePresence>
+
+          {/* Book Button */}
+          <div className="absolute bottom-10 left-0 right-0 flex justify-center">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-pink-pekat text-white px-8 py-3 rounded-full font-bold text-sm shadow-xl shadow-pink-pekat/40 uppercase tracking-wider"
+            >
+              {lang === 'en' ? 'Book an Adventure' : 'Pesan Petualangan'}
+            </motion.button>
+          </div>
         </div>
       </div>
 
