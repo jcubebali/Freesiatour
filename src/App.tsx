@@ -28,17 +28,20 @@ import {
   Instagram,
   Facebook,
   QrCode,
-  History
+  History,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { DESTINATIONS, Tour } from './constants';
 import { GoogleMap, useJsApiLoader, MarkerF } from '@react-google-maps/api';
 
-type Screen = 'splash' | 'home' | 'details' | 'booking' | 'about' | 'map' | 'faq' | 'terms' | 'privacy' | 'qr' | 'history' | 'profile';
+type Screen = 'splash' | 'home' | 'details' | 'booking' | 'about' | 'map' | 'faq' | 'terms' | 'privacy' | 'qr' | 'history' | 'profile' | 'category';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
@@ -100,6 +103,10 @@ export default function App() {
           {screen === 'home' && (
             <HomeScreen 
               onTourClick={handleTourClick}
+              onCategoryClick={(cat) => {
+                setSelectedCategory(cat);
+                setScreen('category');
+              }}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
               destinations={filteredDestinations}
@@ -111,6 +118,15 @@ export default function App() {
               onPrivacyClick={() => setScreen('privacy')}
               lang={lang}
               toggleLang={() => setLang(lang === 'en' ? 'id' : 'en')}
+            />
+          )}
+
+          {screen === 'category' && (
+            <CategoryScreen 
+              category={selectedCategory}
+              onBack={() => setScreen('home')}
+              onTourClick={handleTourClick}
+              lang={lang}
             />
           )}
 
@@ -331,6 +347,7 @@ function SplashScreen({ onContinue }: { onContinue: () => void }) {
 
 function HomeScreen({ 
   onTourClick, 
+  onCategoryClick,
   searchQuery, 
   setSearchQuery,
   destinations,
@@ -344,6 +361,7 @@ function HomeScreen({
   toggleLang
 }: { 
   onTourClick: (tour: Tour) => void;
+  onCategoryClick: (category: string) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   destinations: Tour[];
@@ -357,15 +375,18 @@ function HomeScreen({
   toggleLang: () => void;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const highlightedDestinations = DESTINATIONS.filter(d => d.highlighted);
 
   useEffect(() => {
+    setCurrentIndex(0);
+    if (highlightedDestinations.length === 0) return;
     const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % destinations.length);
+      setCurrentIndex((prev) => (prev + 1) % highlightedDestinations.length);
     }, 5000);
     return () => clearInterval(interval);
-  }, [destinations.length]);
+  }, [highlightedDestinations.length]);
 
-  const currentTour = destinations[currentIndex];
+  const currentTour = highlightedDestinations[currentIndex];
 
   return (
     <motion.div 
@@ -382,7 +403,7 @@ function HomeScreen({
           referrerPolicy="no-referrer"
         />
         <div className={`absolute inset-0 ${isDarkMode ? 'bg-slate-900/70' : 'bg-white/40'}`} />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white dark:to-slate-900" />
+        <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-white to-transparent dark:from-slate-900" />
       </div>
       <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-slate-50 dark:border-slate-800">
         <div className="flex items-center space-x-3">
@@ -445,7 +466,7 @@ function HomeScreen({
           <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-hijau-pekat/5 rounded-full" />
         </div>
 
-        <div className="rounded-3xl h-40 relative overflow-hidden group cursor-pointer" onClick={() => onTourClick(DESTINATIONS[0])}>
+        <div className="rounded-3xl h-40 relative overflow-hidden group cursor-pointer" onClick={() => onCategoryClick('Bali')}>
           <img 
             src={DESTINATIONS[0].image} 
             alt="Featured" 
@@ -467,12 +488,14 @@ function HomeScreen({
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-xl dark:text-white">{lang === 'en' ? 'Best Destinations' : 'Destinasi Terbaik'}</h3>
+          <h3 className="font-bold text-xl dark:text-white">
+            {lang === 'en' ? 'Best Destinations' : 'Destinasi Terbaik'}
+          </h3>
           <div className="flex items-center space-x-2">
             <motion.button 
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={() => setCurrentIndex((prev) => (prev - 1 + destinations.length) % destinations.length)}
+              onClick={() => setCurrentIndex((prev) => (prev - 1 + highlightedDestinations.length) % highlightedDestinations.length)}
               className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-pink-pekat hover:text-white dark:hover:bg-pink-pekat transition-colors"
             >
               <ChevronLeft size={16} />
@@ -480,7 +503,7 @@ function HomeScreen({
             <motion.button 
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={() => setCurrentIndex((prev) => (prev + 1) % destinations.length)}
+              onClick={() => setCurrentIndex((prev) => (prev + 1) % highlightedDestinations.length)}
               className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-pink-pekat hover:text-white dark:hover:bg-pink-pekat transition-colors"
             >
               <ChevronRight size={16} />
@@ -488,103 +511,115 @@ function HomeScreen({
           </div>
         </div>
 
-        <div className="relative h-[400px] -mx-6 overflow-hidden bg-black group cursor-pointer" onClick={() => onTourClick(currentTour)}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentTour.id}
-              initial={{ opacity: 0, scale: 1.1 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="absolute inset-0"
-            >
-              <img 
-                src={currentTour.image} 
-                alt={currentTour.title} 
-                className="w-full h-full object-cover opacity-70"
-                referrerPolicy="no-referrer"
-              />
-            </motion.div>
-          </AnimatePresence>
-
-          {/* Large Background Text */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none overflow-hidden">
+        {highlightedDestinations.length > 0 ? (
+          <div className="relative h-[400px] -mx-6 overflow-hidden bg-black group cursor-pointer" onClick={() => currentTour && onTourClick(currentTour)}>
             <AnimatePresence mode="wait">
-              <motion.div
-                key={currentTour.title}
-                initial={{ y: 50, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -50, opacity: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="text-center"
-              >
-                <div className="text-white/80 text-[10px] uppercase tracking-[0.3em] font-bold mb-2">
-                  {lang === 'en' ? 'Your Next Vacation In' : 'Liburan Anda Berikutnya Di'}
-                </div>
-                <h2 className="text-white text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none">
-                  {currentTour.title}
-                </h2>
-              </motion.div>
+              {currentTour && (
+                <motion.div
+                  key={currentTour.id}
+                  initial={{ opacity: 0, scale: 1.1 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
+                  className="absolute inset-0"
+                >
+                  <img 
+                    src={currentTour.image} 
+                    alt={currentTour.title} 
+                    className="w-full h-full object-cover opacity-70"
+                    referrerPolicy="no-referrer"
+                  />
+                </motion.div>
+              )}
             </AnimatePresence>
-          </div>
 
-          {/* Traveler Image (Static) */}
-          <div className="absolute inset-0 flex items-end justify-start pointer-events-none">
-            <div className="relative h-[80%] w-full flex justify-start pl-4 md:pl-12 transform translate-y-4">
-              <motion.img 
-                src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771899527/grok-image-6586278a-e917-486c-b94c-26e4cf71da00_2-fotor-bg-remover-20260224101231_cv61nk.png" 
-                alt="Traveler" 
-                className="h-full object-contain object-bottom"
-                referrerPolicy="no-referrer"
-                animate={{ 
-                  y: [0, -4, 0, -4, 0],
-                  x: [0, -1, 0, 1, 0],
-                  rotate: [0, -0.5, 0, 0.5, 0]
-                }}
-                transition={{ 
-                  repeat: Infinity, 
-                  duration: 1.2,
-                  ease: "easeInOut"
-                }}
-              />
+            {/* Large Background Text */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none overflow-hidden">
+              <AnimatePresence mode="wait">
+                {currentTour && (
+                  <motion.div
+                    key={currentTour.title}
+                    initial={{ y: 50, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -50, opacity: 0 }}
+                    transition={{ duration: 0.6, delay: 0.2 }}
+                    className="text-center"
+                  >
+                    <div className="text-white/80 text-[10px] uppercase tracking-[0.3em] font-bold mb-2">
+                      {lang === 'en' ? 'Your Next Vacation In' : 'Liburan Anda Berikutnya Di'}
+                    </div>
+                    <h2 className="text-white text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none">
+                      {currentTour.title}
+                    </h2>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Traveler Image (Static) */}
+            <div className="absolute inset-0 flex items-end justify-start pointer-events-none">
+              <div className="relative h-[80%] w-full flex justify-start pl-4 md:pl-12 transform translate-y-4">
+                <motion.img 
+                  src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771899527/grok-image-6586278a-e917-486c-b94c-26e4cf71da00_2-fotor-bg-remover-20260224101231_cv61nk.png" 
+                  alt="Traveler" 
+                  className="h-full object-contain object-bottom"
+                  referrerPolicy="no-referrer"
+                  animate={{ 
+                    y: [0, -4, 0, -4, 0],
+                    x: [0, -1, 0, 1, 0],
+                    rotate: [0, -0.5, 0, 0.5, 0]
+                  }}
+                  transition={{ 
+                    repeat: Infinity, 
+                    duration: 1.2,
+                    ease: "easeInOut"
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Badge */}
+            <AnimatePresence mode="wait">
+              {currentTour && (
+                <motion.div
+                  key={`badge-${currentTour.id}`}
+                  initial={{ scale: 0.8, opacity: 0, y: -10 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.8, opacity: 0, y: -10 }}
+                  className="absolute top-6 right-6 bg-white/20 backdrop-blur-md border border-white/40 rounded-2xl p-3 shadow-2xl flex items-center gap-3"
+                >
+                  <div className="flex flex-col text-right">
+                    <span className="text-white text-xs font-black uppercase tracking-wider drop-shadow-md">
+                      {lang === 'en' ? '14 Days' : '14 Hari'}
+                    </span>
+                    <span className="text-white/90 text-[8px] font-bold uppercase tracking-widest drop-shadow-md">
+                      {lang === 'en' ? 'All Inclusive' : 'Semua Termasuk'}
+                    </span>
+                  </div>
+                  <div className="w-px h-8 bg-white/40"></div>
+                  <div className="text-pink-pekat text-xl font-black drop-shadow-sm">
+                    ${currentTour.price}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Book Button */}
+            <div className="absolute bottom-10 left-0 right-0 flex justify-center">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="bg-[#E87230] text-white px-8 py-3 rounded-full font-bold text-sm shadow-xl shadow-[#E87230]/40 uppercase tracking-wider"
+              >
+                {lang === 'en' ? 'Book an Adventure' : 'Pesan Petualangan'}
+              </motion.button>
             </div>
           </div>
-
-          {/* Badge */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`badge-${currentTour.id}`}
-              initial={{ scale: 0.8, opacity: 0, y: -10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.8, opacity: 0, y: -10 }}
-              className="absolute top-6 right-6 bg-white/20 backdrop-blur-md border border-white/40 rounded-2xl p-3 shadow-2xl flex items-center gap-3"
-            >
-              <div className="flex flex-col text-right">
-                <span className="text-white text-xs font-black uppercase tracking-wider drop-shadow-md">
-                  {lang === 'en' ? '14 Days' : '14 Hari'}
-                </span>
-                <span className="text-white/90 text-[8px] font-bold uppercase tracking-widest drop-shadow-md">
-                  {lang === 'en' ? 'All Inclusive' : 'Semua Termasuk'}
-                </span>
-              </div>
-              <div className="w-px h-8 bg-white/40"></div>
-              <div className="text-pink-pekat text-xl font-black drop-shadow-sm">
-                ${currentTour.price}
-              </div>
-            </motion.div>
-          </AnimatePresence>
-
-          {/* Book Button */}
-          <div className="absolute bottom-10 left-0 right-0 flex justify-center">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="bg-[#E87230] text-white px-8 py-3 rounded-full font-bold text-sm shadow-xl shadow-[#E87230]/40 uppercase tracking-wider"
-            >
-              {lang === 'en' ? 'Book an Adventure' : 'Pesan Petualangan'}
-            </motion.button>
+        ) : (
+          <div className="h-[400px] flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-3xl -mx-6">
+            <p className="text-abu-abu font-medium">{lang === 'en' ? 'No tours found' : 'Tour tidak ditemukan'}</p>
           </div>
-        </div>
+        )}
       </div>
 
       </div>
@@ -632,6 +667,77 @@ function HomeScreen({
           <button onClick={onPrivacyClick} className="hover:text-pink-pekat transition-colors">Privacy Policy</button>
           <button onClick={onFaqClick} className="hover:text-pink-pekat transition-colors">FAQ</button>
         </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function CategoryScreen({ 
+  category, 
+  onBack, 
+  onTourClick, 
+  lang 
+}: { 
+  category: string; 
+  onBack: () => void; 
+  onTourClick: (tour: Tour) => void;
+  lang: 'en' | 'id';
+}) {
+  const tours = DESTINATIONS.filter(d => 
+    d.location.toLowerCase().includes(category.toLowerCase()) ||
+    d.title.toLowerCase().includes(category.toLowerCase())
+  );
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-y-auto"
+    >
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 py-4 flex items-center border-b border-slate-50 dark:border-slate-800">
+        <button onClick={onBack} className="mr-4 text-hitam-pekat dark:text-white">
+          <ChevronLeft size={24} />
+        </button>
+        <h3 className="dark:text-white text-xl font-bold">
+          {lang === 'en' ? `${category} Tours` : `Paket Tour ${category}`}
+        </h3>
+      </header>
+
+      <div className="p-6 space-y-4">
+        {tours.map((tour) => (
+          <motion.div 
+            key={tour.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => onTourClick(tour)}
+            className="bg-white dark:bg-slate-800 rounded-3xl p-3 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center space-x-4 cursor-pointer hover:shadow-md transition-shadow group"
+          >
+            <div className="w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0">
+              <img src={tour.image} alt={tour.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" referrerPolicy="no-referrer" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <h4 className="font-bold text-hitam-pekat dark:text-white text-sm truncate">{tour.title}</h4>
+                <div className="text-pink-pekat font-bold text-sm">${tour.price}</div>
+              </div>
+              <div className="flex items-center text-abu-abu dark:text-slate-400 text-[10px] mb-2">
+                <MapPin size={10} className="mr-1" />
+                {tour.location}
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center text-oren-prosess text-[10px] font-bold">
+                  <Star size={10} fill="currentColor" className="mr-1" />
+                  {tour.rating}
+                  <span className="text-abu-abu dark:text-slate-500 font-normal ml-1">({tour.reviews})</span>
+                </div>
+                <div className="text-[10px] text-abu-abu dark:text-slate-500 font-medium">
+                  {tour.duration}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
       </div>
     </motion.div>
   );
@@ -733,19 +839,51 @@ function DetailsScreen({ tour, onBack, onBook }: { tour: Tour; onBack: () => voi
 
         <div>
           <h3 className="mb-4 dark:text-white">Itinerary</h3>
-          <div className="space-y-4">
+          <div className="space-y-4 relative before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100 dark:before:bg-slate-800">
             {tour.itinerary.map((item, idx) => (
-              <div key={idx} className="flex items-start space-x-4">
-                <div className="mt-1 w-2 h-2 rounded-full bg-pink-pekat flex-shrink-0" />
+              <div key={idx} className="flex items-start space-x-4 relative z-10">
+                <div className="mt-1.5 w-4 h-4 rounded-full bg-white dark:bg-slate-900 border-2 border-pink-pekat flex-shrink-0" />
                 <p className="text-hitam-pekat dark:text-slate-300 text-body-2 font-medium">{item}</p>
               </div>
             ))}
           </div>
         </div>
 
+        <div className="grid grid-cols-1 gap-6">
+          <div className="p-6 bg-hijau-muda/20 dark:bg-hijau-pekat/5 rounded-3xl border border-hijau-muda/30 dark:border-hijau-pekat/10">
+            <h4 className="text-hijau-pekat dark:text-hijau-muda font-bold mb-4 flex items-center">
+              <CheckCircle2 size={18} className="mr-2" />
+              What's Included
+            </h4>
+            <ul className="space-y-2">
+              {tour.included.map((item, idx) => (
+                <li key={idx} className="text-xs text-hijau-pekat/80 dark:text-hijau-muda/70 flex items-start">
+                  <span className="mr-2">•</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="p-6 bg-red-50 dark:bg-red-900/5 rounded-3xl border border-red-100 dark:border-red-900/10">
+            <h4 className="text-red-600 dark:text-red-400 font-bold mb-4 flex items-center">
+              <XCircle size={18} className="mr-2" />
+              What's Excluded
+            </h4>
+            <ul className="space-y-2">
+              {tour.excluded.map((item, idx) => (
+                <li key={idx} className="text-xs text-red-600/80 dark:text-red-400/70 flex items-start">
+                  <span className="mr-2">•</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="dark:text-white">Reviews</h3>
+            <h3 className="dark:text-white">Customer Reviews</h3>
             <div className="flex items-center text-oren-prosess font-bold">
               <Star size={18} fill="currentColor" className="mr-1" />
               {tour.rating}
