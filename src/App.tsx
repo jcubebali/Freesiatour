@@ -396,7 +396,7 @@ function HomeScreen({
               decoding="async"
             />
           </div>
-          <span className="font-display font-bold text-xl text-ungu-pekat dark:text-ungu-muda">Freesiatour</span>
+          <span className="font-display font-bold text-xl text-[#E87230]">Freesiatour</span>
         </div>
         <div className="flex items-center space-x-2">
           <button 
@@ -416,7 +416,7 @@ function HomeScreen({
 
       <div className="p-6 pt-64 pb-20 relative z-10">
         <div className="mb-8">
-          <h2 className="dark:text-white">{lang === 'en' ? <>Where do you <br />want to go?</> : <>Ke mana Anda <br />ingin pergi?</>}</h2>
+          <h2 className="text-ungu-pekat dark:text-ungu-muda">{lang === 'en' ? <>Where do you <br />want to go?</> : <>Ke mana Anda <br />ingin pergi?</>}</h2>
           <div className="mt-6 relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-abu-abu" size={20} />
             <input 
@@ -554,18 +554,21 @@ function HomeScreen({
           <AnimatePresence mode="wait">
             <motion.div
               key={`badge-${currentTour.id}`}
-              initial={{ scale: 0, rotate: -20 }}
-              animate={{ scale: 1, rotate: 0 }}
-              exit={{ scale: 0, rotate: 20 }}
-              className="absolute top-6 right-6 w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center text-center p-2 shadow-2xl border-4 border-black/10"
+              initial={{ scale: 0.8, opacity: 0, y: -10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.8, opacity: 0, y: -10 }}
+              className="absolute top-6 right-6 bg-white/20 backdrop-blur-md border border-white/40 rounded-2xl p-3 shadow-2xl flex items-center gap-3"
             >
-              <div className="text-[10px] font-black leading-tight uppercase">
-                {lang === 'en' ? '14 Days' : '14 Hari'}
+              <div className="flex flex-col text-right">
+                <span className="text-white text-xs font-black uppercase tracking-wider drop-shadow-md">
+                  {lang === 'en' ? '14 Days' : '14 Hari'}
+                </span>
+                <span className="text-white/90 text-[8px] font-bold uppercase tracking-widest drop-shadow-md">
+                  {lang === 'en' ? 'All Inclusive' : 'Semua Termasuk'}
+                </span>
               </div>
-              <div className="text-[8px] font-bold opacity-60 uppercase leading-tight">
-                {lang === 'en' ? 'All Inclusive' : 'Semua Termasuk'}
-              </div>
-              <div className="text-sm font-black text-pink-pekat mt-1">
+              <div className="w-px h-8 bg-white/40"></div>
+              <div className="text-pink-pekat text-xl font-black drop-shadow-sm">
                 ${currentTour.price}
               </div>
             </motion.div>
@@ -576,7 +579,7 @@ function HomeScreen({
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="bg-pink-pekat text-white px-8 py-3 rounded-full font-bold text-sm shadow-xl shadow-pink-pekat/40 uppercase tracking-wider"
+              className="bg-[#E87230] text-white px-8 py-3 rounded-full font-bold text-sm shadow-xl shadow-[#E87230]/40 uppercase tracking-wider"
             >
               {lang === 'en' ? 'Book an Adventure' : 'Pesan Petualangan'}
             </motion.button>
