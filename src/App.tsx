@@ -187,7 +187,7 @@ export default function App() {
         {(screen === 'home' || screen === 'map' || screen === 'qr' || screen === 'history' || screen === 'profile') && (
           <div className="absolute bottom-4 left-0 right-0 px-4 z-50 pointer-events-none">
             <div className="max-w-md mx-auto relative pointer-events-auto">
-              <nav className="h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl flex items-center justify-around rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/20 dark:border-slate-800/50 relative overflow-visible">
+              <nav className="h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl flex items-center rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/20 dark:border-slate-800/50 relative overflow-visible">
                 
                 {/* Simple Sliding Indicator */}
                 <motion.div 
@@ -211,7 +211,7 @@ export default function App() {
                 {/* Nav Items */}
                 {[
                   { id: 'home', icon: Home, label: 'Home' },
-                  { id: 'map', icon: Search, label: 'Search' },
+                  { id: 'map', icon: Compass, label: 'Search' },
                   { id: 'qr', icon: QrCode, label: 'QR Code' },
                   { id: 'history', icon: History, label: 'History' },
                   { id: 'profile', icon: User, label: 'Profile' }
@@ -223,7 +223,7 @@ export default function App() {
                       onClick={() => {
                         setScreen(item.id as Screen);
                       }}
-                      className="relative flex flex-col items-center justify-center w-full h-full z-10"
+                      className="relative flex flex-col items-center justify-center flex-1 h-full z-10"
                     >
                       <motion.div
                         animate={{ 
