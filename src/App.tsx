@@ -1166,6 +1166,15 @@ function AboutScreen({ onBack }: { onBack: () => void }) {
         </div>
 
         <div className="mt-12 pt-8 border-t border-slate-100 dark:border-slate-800 w-full">
+          <div className="rounded-3xl overflow-hidden shadow-lg border border-slate-100 dark:border-slate-800 mb-6">
+            <img 
+              src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771987515/freesiatour_onduty_fobrw2.jpg" 
+              alt="Freesiatour on Duty" 
+              className="w-full h-auto object-cover"
+              referrerPolicy="no-referrer"
+              loading="lazy"
+            />
+          </div>
           <p className="text-xs text-abu-abu dark:text-slate-500 italic">
             "Travel is the only thing you buy that makes you richer."
           </p>
