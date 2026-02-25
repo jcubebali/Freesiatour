@@ -468,7 +468,7 @@ function HomeScreen({
 
         <div className="rounded-3xl h-40 relative overflow-hidden group cursor-pointer" onClick={() => onCategoryClick('Bali')}>
           <img 
-            src={DESTINATIONS[0].image} 
+            src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771984511/78435678_3241741195900196_3087212850163220480_n_h7etps.jpg" 
             alt="Featured" 
             className="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-110"
             referrerPolicy="no-referrer"
@@ -534,23 +534,37 @@ function HomeScreen({
             </AnimatePresence>
 
             {/* Large Background Text */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none overflow-hidden">
+            <div className="absolute inset-0 flex flex-col items-start justify-start p-8 pointer-events-none overflow-hidden">
               <AnimatePresence mode="wait">
                 {currentTour && (
                   <motion.div
                     key={currentTour.title}
-                    initial={{ y: 50, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: -50, opacity: 0 }}
+                    initial={{ x: -30, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: 30, opacity: 0 }}
                     transition={{ duration: 0.6, delay: 0.2 }}
-                    className="text-center"
+                    className="text-left"
                   >
                     <div className="text-white/80 text-[10px] uppercase tracking-[0.3em] font-bold mb-2">
                       {lang === 'en' ? 'Your Next Vacation In' : 'Liburan Anda Berikutnya Di'}
                     </div>
-                    <h2 className="text-white text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none">
+                    <h2 className="text-white text-4xl md:text-5xl font-black uppercase tracking-tighter leading-none">
                       {currentTour.title}
                     </h2>
+                    <div className="mt-4 bg-white/20 backdrop-blur-md border border-white/40 rounded-2xl p-3 px-5 shadow-2xl flex items-center gap-3 w-fit pointer-events-auto">
+                      <div className="flex flex-col">
+                        <span className="text-white text-xs font-black uppercase tracking-wider drop-shadow-md">
+                          {lang === 'en' ? '14 Days' : '14 Hari'}
+                        </span>
+                        <span className="text-white/90 text-[8px] font-bold uppercase tracking-widest drop-shadow-md">
+                          {lang === 'en' ? 'All Inclusive' : 'Semua Termasuk'}
+                        </span>
+                      </div>
+                      <div className="w-px h-8 bg-white/40"></div>
+                      <div className="text-pink-pekat text-xl font-black drop-shadow-sm">
+                        ${currentTour.price}
+                      </div>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -578,31 +592,7 @@ function HomeScreen({
               </div>
             </div>
 
-            {/* Badge */}
-            <AnimatePresence mode="wait">
-              {currentTour && (
-                <motion.div
-                  key={`badge-${currentTour.id}`}
-                  initial={{ scale: 0.8, opacity: 0, y: -10 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.8, opacity: 0, y: -10 }}
-                  className="absolute top-6 right-6 bg-white/20 backdrop-blur-md border border-white/40 rounded-2xl p-3 shadow-2xl flex items-center gap-3"
-                >
-                  <div className="flex flex-col text-right">
-                    <span className="text-white text-xs font-black uppercase tracking-wider drop-shadow-md">
-                      {lang === 'en' ? '14 Days' : '14 Hari'}
-                    </span>
-                    <span className="text-white/90 text-[8px] font-bold uppercase tracking-widest drop-shadow-md">
-                      {lang === 'en' ? 'All Inclusive' : 'Semua Termasuk'}
-                    </span>
-                  </div>
-                  <div className="w-px h-8 bg-white/40"></div>
-                  <div className="text-pink-pekat text-xl font-black drop-shadow-sm">
-                    ${currentTour.price}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+
 
             {/* Book Button */}
             <div className="absolute bottom-10 left-0 right-0 flex justify-center">
