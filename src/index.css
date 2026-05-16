@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -6,6 +6,7 @@
 @theme {
   --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", sans-serif;
+  --font-serif: "Playfair Display", serif;
   
   /* Primary Colors */
   --color-pink-pekat: #E6007E;
@@ -26,6 +27,7 @@
   /* Accent Colors */
   --color-merah-error: #D33434;
   --color-oren-prosess: #E87230;
+  --color-bali-orange: #F97316;
   
   /* Custom Utilities */
   --background-gradient-primary: linear-gradient(to right, #E6007E, #663398);
@@ -53,11 +55,11 @@
 @utility text-button { font-family: var(--font-sans); font-weight: 500; font-size: 24px; }
 
 .btn-primary {
-  @apply bg-[linear-gradient(to_right,#E6007E,#663398)] text-white rounded-full px-8 py-4 text-button transition-all hover:opacity-90 active:scale-95 flex items-center justify-center;
+  @apply bg-[#E87230] text-white font-black uppercase tracking-widest text-sm rounded-2xl h-14 shadow-xl shadow-[#E87230]/30 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2;
 }
 
 .btn-secondary {
-  @apply bg-white border-2 border-pink-pekat text-pink-pekat rounded-full px-8 py-4 text-button transition-all hover:bg-pink-pekat hover:text-white active:scale-95 flex items-center justify-center;
+  @apply bg-white border-2 border-[#E87230] text-[#E87230] font-black uppercase tracking-widest text-sm rounded-2xl h-14 transition-all hover:bg-slate-50 active:scale-[0.98] flex items-center justify-center gap-2;
 }
 
 .glass-card {
@@ -66,4 +68,29 @@
 
 .mobile-container {
   @apply w-full md:max-w-3xl lg:max-w-5xl xl:max-w-7xl mx-auto h-screen sm:h-[calc(100vh-2rem)] sm:rounded-3xl bg-white shadow-2xl relative overflow-hidden flex flex-col;
+}
+
+@layer utilities {
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@media print {
+  @page {
+    margin: 10mm;
+    size: A4 portrait;
+  }
+  body {
+    background-color: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
 }

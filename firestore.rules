@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidVehicle(data) {
+      return data.id is string && data.vehicle is string;
+    }
+
+    function isValidDestination(data) {
+      return data.id is string && data.name is string;
+    }
+
+    function isValidActivity(data) {
+      return data.id is string && data.name is string;
+    }
+
+    // Tours Collection
+    match /tours/{tourId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(tourId);
+    }
+
+    // Vehicles Collection
+    match /vehicles/{vehicleId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(vehicleId) && isValidVehicle(request.resource.data);
+    }
+
+    // Destinations Collection
+    match /destinations/{destId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(destId) && isValidDestination(request.resource.data);
+    }
+
+    // Activities Collection
+    match /activities/{activityId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(activityId) && isValidActivity(request.resource.data);
+    }
+    
+    // Settings Collection
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Admin collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn() && request.auth.uid == adminId;
+      allow write: if false;
+    }
+  }
+}

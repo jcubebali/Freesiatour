@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "Transport vehicle details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "vehicle": { "type": "string" },
+        "type": { "type": "string" },
+        "seats": { "type": "number" },
+        "rate_with_driver_idr": { "type": "number" },
+        "rate_oneway_idr": { "type": "number" },
+        "status": { "type": "string" },
+        "updated": { "type": "string" }
+      },
+      "required": ["id", "vehicle", "type"]
+    },
+    "Destination": {
+      "title": "Destination",
+      "description": "Tourism destination in Bali",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "entrance_fee_idr": { "type": "number" },
+        "is_free": { "type": "boolean" },
+        "areas": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string" },
+        "updated": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "Activity package details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "vendor": { "type": "string" },
+        "price_min_idr": { "type": "number" },
+        "price_max_idr": { "type": "number" },
+        "duration": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    }
+  },
+  "firestore": {
+    "vehicles": {
+      "schema": "Vehicle",
+      "description": "Collection of transport vehicles"
+    },
+    "destinations": {
+      "schema": "Destination",
+      "description": "Collection of Bali destinations"
+    },
+    "activities": {
+      "schema": "Activity",
+      "description": "Collection of tour activities"
+    }
+  }
+}

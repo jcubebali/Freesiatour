@@ -15,6 +15,7 @@ export interface Tour {
   excluded: string[];
   lat: number;
   lng: number;
+  category?: string;
   highlighted?: boolean;
 }
 
@@ -33,7 +34,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Air-conditioned vehicle', 'Mineral drinking water', 'Driver as guide', 'Petrol', 'Parking fee'],
     excluded: ['Personal expenses', 'Entrance fees (Uluwatu Temple IDR 50K, Kecak Dance at Uluwatu Temple IDR 150K, Pandawa Beach IDR 15K)', 'Lunch and dinner'],
     lat: -8.8291,
-    lng: 115.0886
+    lng: 115.0886,
+    category: 'Cultural'
   },
   {
     id: 'nusadua',
@@ -49,7 +51,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Air-conditioned vehicle', 'Mineral drinking water', 'Driver as guide', 'Petrol', 'Parking fee'],
     excluded: ['Personal expenses', 'Watersports Activity', 'Entrance fees (Garuda Wisnu Kencana Statue IDR 125K)', 'Lunch'],
     lat: -8.7941,
-    lng: 115.2266
+    lng: 115.2266,
+    category: 'Water Sports'
   },
   {
     id: 'seminyak',
@@ -65,7 +68,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Air-conditioned vehicle', 'Mineral drinking water', 'Driver as guide', 'Petrol', 'Parking fee'],
     excluded: ['Personal expenses', 'Entrance fees (Tanah Lot temple IDR 25K)', 'Lunch'],
     lat: -8.6913,
-    lng: 115.1682
+    lng: 115.1682,
+    category: 'Beach'
   },
   {
     id: 'bedugul',
@@ -81,7 +85,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Air-conditioned vehicle', 'Mineral drinking water', 'Driver as guide', 'Petrol', 'Parking fee'],
     excluded: ['Personal expenses', 'Entrance fees (Ulundanu Temple IDR 30K, Bali Handara Gate IDR 25K)', 'Lunch'],
     lat: -8.2750,
-    lng: 115.1668
+    lng: 115.1668,
+    category: 'Nature'
   },
   {
     id: 'singaraja-waterfall',
@@ -97,7 +102,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Air-conditioned vehicle', 'Mineral drinking water', 'Driver as guide', 'Petrol', 'Parking fee'],
     excluded: ['Personal expenses', 'Entrance fees (Ulundanu Temple IDR 30K, Bali Handara Gate IDR 25K)', 'Local guide at Sekumpul Waterfall IDR 300K', 'Lunch'],
     lat: -8.1743,
-    lng: 115.1818
+    lng: 115.1818,
+    category: 'Adventure'
   },
   {
     id: 'dolphin-lovina',
@@ -113,7 +119,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Air-conditioned vehicle', 'Mineral drinking water', 'Driver as guide', 'Petrol', 'Parking fee'],
     excluded: ['Personal expenses', 'Entrance fees (Bali Handara Gate IDR 25K, Ulundanu Temple IDR 30K)', 'Traditional boat IDR 350K', 'Lunch'],
     lat: -8.1611,
-    lng: 115.0253
+    lng: 115.0253,
+    category: 'Nature'
   },
   {
     id: 'nusa-penida-west',
@@ -129,7 +136,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Fastboat tickets (return)', 'Mineral drinking water', 'Air-conditioned vehicle', 'Driver as guide', 'Petrol', 'Parking fee', 'Lunch (local restaurant)', 'Entrance tickets'],
     excluded: ['Personal expenses', 'Attraction fees'],
     lat: -8.7278,
-    lng: 115.5444
+    lng: 115.5444,
+    category: 'Beach'
   },
   {
     id: 'nusa-penida-east',
@@ -145,7 +153,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Fastboat tickets (return)', 'Mineral drinking water', 'Air-conditioned vehicle', 'Driver as guide', 'Petrol', 'Parking fee', 'Lunch (local restaurant)', 'Entrance tickets'],
     excluded: ['Personal expenses', 'Attraction fees'],
     lat: -8.7753,
-    lng: 115.5866
+    lng: 115.5866,
+    category: 'Beach'
   },
   {
     id: 'ubud-tegalalang',
@@ -162,6 +171,7 @@ export const DESTINATIONS: Tour[] = [
     excluded: ['Personal expenses', 'Entrance fees (Swing IDR 20K, Tegalalang IDR 20K, Elephant park IDR 316K)', 'Attraction fees', 'Lunch'],
     lat: -8.4333,
     lng: 115.2796,
+    category: 'Nature',
     highlighted: true
   },
   {
@@ -178,7 +188,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Air-conditioned vehicle', 'Mineral drinking water', 'Driver as guide', 'Petrol', 'Parking fee'],
     excluded: ['Personal expenses', 'Entrance fees (Tirta Empul IDR 35K, Kintamani IDR 50K, Hot Spring IDR 300K)', 'Lunch'],
     lat: -8.2821,
-    lng: 115.3644
+    lng: 115.3644,
+    category: 'Nature'
   },
   {
     id: 'ubud-monkey-forest',
@@ -194,7 +205,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Air-conditioned vehicle', 'Mineral drinking water', 'Driver as guide', 'Petrol', 'Parking fee'],
     excluded: ['Personal expenses', 'Entrance fees (Monkey Forest IDR 50K, Tegenungan IDR 20K)', 'Lunch'],
     lat: -8.5190,
-    lng: 115.2600
+    lng: 115.2600,
+    category: 'Nature'
   },
   {
     id: 'lempuyang-temple',
@@ -210,7 +222,8 @@ export const DESTINATIONS: Tour[] = [
     included: ['Air-conditioned vehicle', 'Mineral drinking water', 'Driver as guide', 'Petrol', 'Parking fee'],
     excluded: ['Personal expenses', 'Entrance fees (Lempuyang IDR 20K, Tirta Gangga IDR 25K)', 'Lunch'],
     lat: -8.3908,
-    lng: 115.6293
+    lng: 115.6293,
+    category: 'Cultural'
   },
   {
     id: 'bromo',
@@ -227,6 +240,7 @@ export const DESTINATIONS: Tour[] = [
     excluded: ['Personal expenses', 'Horse riding', 'Lunch'],
     lat: -7.9425,
     lng: 112.9531,
+    category: 'Adventure',
     highlighted: true
   }
 ];
