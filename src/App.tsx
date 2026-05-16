@@ -294,8 +294,7 @@ export default function App() {
 
   return (
     <APIProvider apiKey={MAP_API_KEY} version="weekly">
-      <div className="bg-slate-100 dark:bg-black min-h-screen flex justify-center">
-        <div className="min-h-screen bg-white dark:bg-slate-900 border-x border-slate-200 dark:border-slate-800 relative overflow-x-hidden transition-colors duration-300 flex flex-col w-full sm:max-w-[480px] md:max-w-2xl lg:max-w-4xl shadow-2xl ring-1 ring-slate-900/5">
+      <div className="min-h-screen bg-white dark:bg-slate-900 border-none relative overflow-x-hidden transition-colors duration-300 flex flex-col w-full">
         {!hasValidMapKey && screen === 'home' && (
           <div className="fixed inset-0 z-[200] bg-white dark:bg-slate-900 flex items-center justify-center p-6">
             <motion.div 
@@ -610,8 +609,7 @@ export default function App() {
           </>
         )}
       </AnimatePresence>
-        </div>
-      </div>
+    </div>
     </APIProvider>
   );
 }
