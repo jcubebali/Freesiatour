@@ -2100,11 +2100,18 @@ function HomeScreen({
         <div className="text-xs text-abu-abu dark:text-slate-400 font-medium uppercase tracking-widest text-center mb-4">
           {lang === 'en' ? 'Our Partners' : 'Mitra Kami'}
         </div>
-        <div className="flex flex-wrap justify-center items-center gap-6 opacity-60">
-          <div className="font-black text-slate-800 dark:text-slate-200 text-xl tracking-tight">tripadvisor</div>
-          <div className="font-bold text-slate-800 dark:text-slate-200 text-xl tracking-tight">airbnb</div>
-          <div className="font-black text-slate-800 dark:text-slate-200 text-xl tracking-tighter">Expedia</div>
-          <div className="font-medium text-slate-800 dark:text-slate-200 text-lg tracking-tight leading-none text-center">Local<br/>Partners</div>
+        <div className="flex flex-wrap justify-center items-center gap-4">
+          {[
+            "https://res.cloudinary.com/dbckdslrw/image/upload/v1778984318/tripadvisor-logo-free-download-tripadvisor-logo-free-png_yzltq4.png",
+            "https://res.cloudinary.com/dbckdslrw/image/upload/v1778984318/images_1_wr3ym1.png",
+            "https://res.cloudinary.com/dbckdslrw/image/upload/v1778984318/images_17_gsxdef.jpg",
+            "https://res.cloudinary.com/dbckdslrw/image/upload/v1778984318/gojek-logo-rounded-hd-free-png_yop6lc.png",
+            "https://res.cloudinary.com/dbckdslrw/image/upload/v1778984319/images_18_q2flof.jpg"
+          ].map((src, i) => (
+             <div key={i} className="w-20 h-20 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center p-3">
+               <img src={src} alt="Partner" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+             </div>
+          ))}
         </div>
       </div>
 

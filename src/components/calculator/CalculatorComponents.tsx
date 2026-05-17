@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import html2canvas from 'html2canvas';
+import { toJpeg } from 'html-to-image';
 import jsPDF from 'jspdf';
 import { 
   Users, 
@@ -102,7 +102,18 @@ export const getQuotationTotalParts = (quotation: QuotationState, activities: an
   const domesticDiscount = quotation.origin === 'Domestic' ? (gross * settings.domesticDiscountPercentage) / 100 : 0;
   const total = gross - domesticDiscount;
 
-  return { nett, markup, domesticDiscount, total };
+  return { 
+    hotelCost,
+    mealCost,
+    vehicleCost,
+    destinationCost,
+    addonsCost,
+    serviceFee,
+    nett, 
+    markup, 
+    domesticDiscount, 
+    total 
+  };
 };
 
 export const Step1Guest: React.FC<StepProps> = ({ onNext, lang, currency }) => {
@@ -1130,19 +1141,22 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
     
     setIsExporting(true);
     try {
-      // Use html2canvas to capture the element
-      const canvas = await html2canvas(element, {
-        scale: 2, // Higher resolution
-        useCORS: true,
+      // Use html-to-image to capture the element, bypassing oklch parsing issues in html2canvas
+      const imgData = await toJpeg(element, {
+        quality: 0.95,
         backgroundColor: '#ffffff',
-        logging: false,
-        windowWidth: 794, // A4 aspect ratio fixed width (~210mm at 96dpi)
+        pixelRatio: 2,
+        width: 794,
+        style: { width: '794px' }
       });
       
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const img = new Image();
+      img.src = imgData;
+      await new Promise(resolve => img.onload = resolve);
+      
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = (img.height * pdfWidth) / img.width;
       
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       
@@ -1381,8 +1395,62 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
                <div className="bg-white rounded-3xl p-6 border-2 border-slate-900 space-y-4 relative overflow-hidden">
                   <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#E87230]/5 rounded-full blur-2xl" />
                   
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                  <div className="space-y-4 z-10 relative">
+                     {/* Cost Breakdown */}
+                     <div className="space-y-2 pb-4 border-b border-slate-100">
+                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">{lang === 'id' ? 'RINCIAN BIAYA' : 'COST BREAKDOWN'}</div>
+                        
+                        {parts.hotelCost > 0 && (
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-slate-500 font-medium">Hotel ({quotation.hotelRooms} Room, {quotation.hotelNights} Night)</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.hotelCost, currency)}</span>
+                          </div>
+                        )}
+                        {parts.vehicleCost > 0 && (
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-slate-500 font-medium">Transport ({quotation.duration} Days)</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.vehicleCost, currency)}</span>
+                          </div>
+                        )}
+                        {parts.destinationCost > 0 && (
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-slate-500 font-medium">Destinations & Tickets</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.destinationCost, currency)}</span>
+                          </div>
+                        )}
+                        {parts.addonsCost > 0 && (
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-slate-500 font-medium">Activities & Extras</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.addonsCost, currency)}</span>
+                          </div>
+                        )}
+                        {parts.mealCost > 0 && (
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-slate-500 font-medium">Meals ({quotation.mealType})</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.mealCost, currency)}</span>
+                          </div>
+                        )}
+                        {parts.serviceFee > 0 && (
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-slate-500 font-medium">Package Service Fee ({quotation.packageType})</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.serviceFee, currency)}</span>
+                          </div>
+                        )}
+                        {parts.markup > 0 && (
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-slate-500 font-medium">Platform / Margin ({settings.markupPercentage}%)</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.markup, currency)}</span>
+                          </div>
+                        )}
+                        {parts.domesticDiscount > 0 && (
+                          <div className="flex justify-between items-center text-[10px] text-emerald-600">
+                            <span className="font-medium">Domestic Discount ({settings.domesticDiscountPercentage}%)</span>
+                            <span className="font-bold">-{formatCurrency(parts.domesticDiscount, currency)}</span>
+                          </div>
+                        )}
+                     </div>
+                     
+                     <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                        <div className="space-y-0.5">
                          <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">PRICE PER PAX</div>
                          <div className="text-xs font-bold text-slate-500 uppercase">{lang === 'id' ? 'Tamu' : 'Per Person'}</div>
