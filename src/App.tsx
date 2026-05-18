@@ -530,18 +530,22 @@ export default function App() {
               className="fixed top-0 right-0 bottom-0 w-[80%] max-w-sm bg-white dark:bg-slate-900 z-[70] shadow-2xl flex flex-col"
             >
               <div className="p-6 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center space-x-2.5">
+                <div className="flex items-center space-x-0">
                   <div className="w-8 h-8 md:w-9 md:h-9 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center shadow-lg overflow-hidden border border-slate-50 dark:border-slate-700">
                     <img 
                       src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771789006/freesiatour_logo.png" 
                       alt="Freesiatour Logo" 
-                      className="w-full h-full object-contain p-1"
+                      className="w-full h-full object-contain p-0 scale-125"
                       referrerPolicy="no-referrer"
                     />
                   </div>
-          <div className="flex flex-col">
-            <span className="font-display font-bold text-sm text-slate-800 dark:text-white leading-none">Freesiatour</span>
-            <span className="text-[6px] font-bold text-[#E87230]/80 tracking-[0.05em] uppercase mt-0.5">Holiday is friendly</span>
+          <div className="flex flex-col items-center justify-center">
+            <span className="font-display font-black text-[#E87230] dark:text-white w-full text-center px-1.5 uppercase leading-none tracking-tight text-base">
+              FREESIATOUR
+            </span>
+            <span className="font-display font-bold text-white uppercase text-[7px] tracking-[0.15em] w-full text-center px-1.5 py-[1px]">
+              HOLIDAY IS FRIENDLY
+            </span>
           </div>
                 </div>
                 <button 
@@ -653,7 +657,7 @@ function SplashScreen({ onContinue }: { onContinue: () => void }) {
                 <img 
                   src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771789006/freesiatour_logo.png" 
                   alt="Freesiatour Logo" 
-                  className="w-full h-full object-contain p-4"
+                  className="w-full h-full object-contain p-0 scale-[1.35]"
                   referrerPolicy="no-referrer"
                   loading="lazy"
                   decoding="async"
@@ -667,15 +671,19 @@ function SplashScreen({ onContinue }: { onContinue: () => void }) {
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.6 }}
         >
-          <div className="flex items-center justify-center gap-3 mb-2">
+          <div className="flex items-center justify-center gap-0 mb-2">
             <img 
               src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771789006/freesiatour_logo.png" 
               alt="" 
-              className="w-10 h-10 object-contain"
+              className="w-10 h-10 object-contain scale-[1.35]"
             />
-            <div className="flex flex-col text-left">
-              <h1 className="text-2xl font-display font-bold text-slate-900 dark:text-white leading-[0.8]">Freesiatour</h1>
-              <p className="text-[8px] font-bold text-[#E87230] tracking-[0.22em] uppercase mt-0.5 ml-0.5">Holiday is friendly</p>
+            <div className="flex flex-col items-center justify-center">
+              <span className="font-display font-black text-[#E87230] dark:text-white w-full text-center px-2 uppercase leading-none tracking-tight text-3xl">
+                FREESIATOUR
+              </span>
+              <span className="font-display font-bold text-white uppercase text-[12.5px] tracking-[0.16em] w-full text-center px-2 py-[3px]">
+                HOLIDAY IS FRIENDLY
+              </span>
             </div>
           </div>
           <p className="text-hitam-pekat dark:text-slate-300 mt-4 text-body-2">
@@ -959,7 +967,7 @@ function LocationAutocomplete({
       try {
         const { suggestions: newSuggestions } = await placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions({
           input: value,
-          includedCountries: ['id'],
+          includedRegionCodes: ['id'],
           sessionToken: sessionToken.current
         });
         setSuggestions(newSuggestions || []);
@@ -1036,10 +1044,10 @@ function LocationAutocomplete({
                         </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-bold text-slate-900 dark:text-white truncate tracking-tight">
-                        {s.placePrediction.structuredFormatting.mainText.text}
+                        {s.placePrediction.mainText?.text}
                       </div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5 font-medium">
-                        {s.placePrediction.structuredFormatting.secondaryText?.text}
+                        {s.placePrediction.secondaryText?.text}
                       </div>
                     </div>
                   </div>
@@ -1243,18 +1251,22 @@ function HomeScreen({
 
         {/* Header (Transparent) */}
         <header className="relative z-40 px-6 py-4 flex items-center justify-between w-full">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-0">
             <div className="w-8 h-8 md:w-9 md:h-9 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center shadow-lg overflow-hidden border border-white/20">
               <img 
                 src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771789006/freesiatour_logo.png" 
                 alt="Freesiatour Logo" 
-                className="w-full h-full object-contain p-1"
+                className="w-full h-full object-contain p-0 scale-125"
                 referrerPolicy="no-referrer"
               />
             </div>
-            <div className="flex flex-col -space-y-0.5">
-              <span className="font-display font-bold text-base md:text-lg text-white drop-shadow-md leading-none">Freesiatour</span>
-              <span className="text-[7px] font-bold text-[#E87230] tracking-[0.05em] uppercase drop-shadow-sm">Holiday is friendly</span>
+            <div className="flex flex-col items-center justify-center drop-shadow-md">
+              <span className="font-display font-black text-[#E87230] dark:text-white w-full text-center px-1.5 uppercase leading-none tracking-tight text-lg">
+                FREESIATOUR
+              </span>
+              <span className="font-display font-bold text-white uppercase text-[8px] tracking-[0.15em] w-full text-center px-1.5 py-[1.5px]">
+                HOLIDAY IS FRIENDLY
+              </span>
             </div>
           </div>
           <div className="flex items-center space-x-2">
