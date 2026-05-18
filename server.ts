@@ -120,6 +120,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
+    // In standard production (non-Vercel), serve static files
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
@@ -132,4 +133,9 @@ async function startServer() {
   });
 }
 
-startServer();
+// Only start the server if not running on Vercel
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
