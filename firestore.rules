@@ -61,6 +61,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Bookings collection
+    match /bookings/{bookingId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
     // Admin collection
     match /admins/{adminId} {
       allow read: if isSignedIn() && request.auth.uid == adminId;

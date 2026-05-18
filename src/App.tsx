@@ -938,38 +938,40 @@ function LocationAutocomplete({
   lang: 'en' | 'id';
   icon: any;
 }) {
-  const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const placesLib = useMapsLibrary('places');
-  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
+  const sessionToken = useRef<any>(null);
 
   useEffect(() => {
-    if (placesLib && !autocompleteService.current) {
-      autocompleteService.current = new placesLib.AutocompleteService();
+    if (placesLib && !sessionToken.current) {
+      sessionToken.current = new placesLib.AutocompleteSessionToken();
     }
   }, [placesLib]);
 
   useEffect(() => {
-    if (!value || !autocompleteService.current) {
-      setSuggestions([]);
-      return;
-    }
+    const fetchPredictions = async () => {
+      if (!value || !placesLib || !placesLib.AutocompleteSuggestion) {
+        setSuggestions([]);
+        return;
+      }
 
-    const timeout = setTimeout(() => {
-      autocompleteService.current?.getPlacePredictions(
-        { input: value, componentRestrictions: { country: 'id' } },
-        (predictions, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-            setSuggestions(predictions);
-          } else {
-            setSuggestions([]);
-          }
-        }
-      );
-    }, 300);
+      try {
+        const { suggestions: newSuggestions } = await placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          input: value,
+          includedCountries: ['id'],
+          sessionToken: sessionToken.current
+        });
+        setSuggestions(newSuggestions || []);
+      } catch (err) {
+        console.error("Autocomplete error:", err);
+        setSuggestions([]);
+      }
+    };
 
+    const timeout = setTimeout(fetchPredictions, 300);
     return () => clearTimeout(timeout);
-  }, [value]);
+  }, [value, placesLib]);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -1016,24 +1018,28 @@ function LocationAutocomplete({
             <div className="py-2 max-h-[300px] overflow-y-auto custom-scrollbar">
             {suggestions?.map((s, i) => (
                 <div 
-                  key={s.place_id}
+                  key={s.placePrediction.placeId}
                   onClick={() => {
-                    onSelect(s.description);
-                    onChange(s.description);
+                    const desc = s.placePrediction.text.text;
+                    onSelect(desc);
+                    onChange(desc);
                     setShowSuggestions(false);
+                    if (placesLib) {
+                      sessionToken.current = new placesLib.AutocompleteSessionToken();
+                    }
                   }}
                   className={`px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer flex items-center justify-between group transition-colors ${i !== suggestions.length - 1 ? 'border-b border-slate-100 dark:border-slate-800' : ''}`}
                 >
                   <div className="flex items-center gap-4 min-w-0 flex-1">
                         <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 shrink-0 group-hover:bg-[#E87230]/10 group-hover:text-[#E87230] transition-colors">
-                          {s.types.includes('establishment') || s.types.includes('point_of_interest') ? <MapPin size={14} /> : <Clock size={14} />}
+                          {s.placePrediction.types.includes('establishment') || s.placePrediction.types.includes('point_of_interest') ? <MapPin size={14} /> : <Clock size={14} />}
                         </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-bold text-slate-900 dark:text-white truncate tracking-tight">
-                        {s.structured_formatting.main_text}
+                        {s.placePrediction.structuredFormatting.mainText.text}
                       </div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5 font-medium">
-                        {s.structured_formatting.secondary_text}
+                        {s.placePrediction.structuredFormatting.secondaryText?.text}
                       </div>
                     </div>
                   </div>
@@ -2453,29 +2459,92 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const scriptUrl = 'https://app.sandbox.midtrans.com/snap/snap.js';
+    const clientKey = (import.meta as any).env?.VITE_MIDTRANS_CLIENT_KEY || '';
+    if (!document.querySelector(`script[src="${scriptUrl}"]`)) {
+      const script = document.createElement('script');
+      script.src = scriptUrl;
+      script.setAttribute('data-client-key', clientKey);
+      document.body.appendChild(script);
+    }
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Create WhatsApp message for fallback or just simulate
-    const message = `Hi Freesiatour, I'd like to book ${tour.title}.\n\n` +
-      `*Booking Details:*\n` +
-      `- Name: ${formData.name}\n` +
-      `- Phone: ${formData.phone}\n` +
-      `- Date: ${formData.date}\n` +
-      `- Travelers: ${formData.travelers}\n` +
-      `- Pickup: ${formData.pickupAddress}\n` +
-      `- Notes: ${formData.note || '-'}\n\n` +
-      `Total: ${currency} ${Math.round(isRideBooking ? tour.price : tour.price * (parseInt(formData.travelers as any) || 0)).toLocaleString()}`;
-
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setIsSuccess(true);
+    try {
+      const orderId = 'FREESIA-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+      const totalUsd = Math.round(isRideBooking ? tour.price : tour.price * (parseInt(formData.travelers as any) || 0));
+      const totalIdr = totalUsd * USD_TO_IDR;
       
-      // Auto-open WhatsApp
-      window.open(`https://wa.me/6289661141114?text=${encodeURIComponent(message)}`, '_blank');
-    }, 1500);
+      const { db } = await import('./baliquotepro/firebase');
+      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      
+      const bookingData = {
+        orderId,
+        tourId: tour.id,
+        tourTitle: tour.title,
+        customerName: formData.name,
+        customerPhone: formData.phone,
+        date: formData.date,
+        travelers: parseInt(formData.travelers as any) || 0,
+        pickupAddress: formData.pickupAddress,
+        notes: formData.note,
+        totalUsd: totalUsd,
+        totalIdr: totalIdr,
+        paymentStatus: 'pending',
+        createdAt: serverTimestamp()
+      };
+      
+      await setDoc(doc(db, 'bookings', orderId), bookingData);
+      
+      const res = await fetch('/api/midtrans/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          grossAmount: totalIdr,
+          customerDetails: {
+             first_name: formData.name,
+             phone: formData.phone
+          },
+          itemDetails: [{
+             id: tour.id,
+             price: totalIdr,
+             quantity: 1,
+             name: tour.title.substring(0, 50)
+          }]
+        })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to get payment token');
+      
+      (window as any).snap.pay(data.token, {
+        onSuccess: function(result: any){
+          setIsSubmitting(false);
+          setIsSuccess(true);
+        },
+        onPending: function(result: any){
+          setIsSubmitting(false);
+          setIsSuccess(true);
+        },
+        onError: function(result: any){
+          alert("Payment failed!");
+          setIsSubmitting(false);
+        },
+        onClose: function(){
+          setIsSubmitting(false);
+        }
+      });
+      
+    } catch (err) {
+      console.error(err);
+      alert("Error: " + (err as Error).message);
+      setIsSubmitting(false);
+    }
   };
 
   if (isSuccess) {
@@ -2487,7 +2556,8 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
       `- Travelers: ${formData.travelers}\n` +
       `- Pickup: ${formData.pickupAddress}\n` +
       `- Notes: ${formData.note || '-'}\n\n` +
-      `Total: ${currency} ${Math.round(isRideBooking ? tour.price : tour.price * (parseInt(formData.travelers as any) || 0)).toLocaleString()}`;
+      `Total: ${currency} ${Math.round(isRideBooking ? tour.price : tour.price * (parseInt(formData.travelers as any) || 0)).toLocaleString()}` +
+      `\n(Payment status: Paid/Pending via Midtrans)`;
 
     return (
       <motion.div 
