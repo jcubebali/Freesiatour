@@ -64,12 +64,13 @@ service cloud.firestore {
     // Users collection
     match /users/{userId} {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isAdmin();
     }
 
     // Bookings collection
     match /bookings/{bookingId} {
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid || isAdmin();
+      allow create: if isSignedIn();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
