@@ -1,5 +1,5 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../baliquotepro/firebase';
+import { db } from '../firebase';
 
 export interface Tour {
   id: string;

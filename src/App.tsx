@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -46,7 +47,7 @@ import {
 } from 'lucide-react';
 import { DESTINATIONS, Tour } from './constants';
 import { APIProvider, Map, useMap, useMapsLibrary, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
-import BaliQuoteApp from './baliquotepro/App';
+// Removed BaliQuoteApp import
 import { fetchTours, fetchActivities, Activity } from './services/firebaseService';
 import { ACTIVITIES, VEHICLES_DATA } from './calculatorData';
 
@@ -284,9 +285,7 @@ export default function App() {
     }, 1500);
   };
 
-  if (screen === 'calculator') {
-    return <BaliQuoteApp lang={lang} currency={currency} onClose={() => setScreen('home')} />;
-  }
+// Calculator screen removed to clean up baliquotepro reference
 
   const tourCategories = (tours || []).map(t => t.category).filter(Boolean) as string[];
   const activityCategories = (activities || []).filter(a => a.type !== 'addon').map(a => a.category).filter(Boolean) as string[];
@@ -1428,8 +1427,7 @@ function HomeScreen({
                       <motion.button
                         whileHover={{ scale: 1.01, y: -2 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={onCalculatorClick}
-                        className="group relative bg-[#0F172A] h-44 sm:h-52 rounded-[2.5rem] overflow-hidden shadow-xl transition-all border border-white/5"
+                        className="group relative bg-[#0F172A] h-44 sm:h-52 rounded-[2.5rem] overflow-hidden shadow-xl transition-all border border-white/5 hidden"
                       >
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-pink-500/5 via-transparent to-transparent opacity-40" />
                         <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-pink-500/5 blur-[40px] rounded-full" />
@@ -1967,8 +1965,7 @@ function HomeScreen({
       {/* Premium Trip Estimator Design - Refined Style */}
       <motion.div 
         whileTap={{ scale: 0.98 }}
-        onClick={onCalculatorClick}
-        className="mt-10 mb-6 group cursor-pointer px-6"
+        className="mt-10 mb-6 group cursor-pointer px-6 hidden"
       >
         <div className="relative overflow-hidden rounded-[3rem] bg-[#0F172A] shadow-2xl border border-white/5">
           {/* Subtle Accent Glows */}
@@ -2233,6 +2230,8 @@ function CategoryScreen({
   );
 }
 
+// removed
+
 function DetailsScreen({ tour, onBack, onBook, currency }: { tour: Tour; onBack: () => void; onBook: () => void; currency: Currency }) {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -2249,6 +2248,10 @@ function DetailsScreen({ tour, onBack, onBook, currency }: { tour: Tour; onBack:
       exit={{ opacity: 0 }}
       className="flex-1 flex flex-col overflow-y-auto dark:bg-slate-900"
     >
+      <Helmet>
+        <title>{tour.title} | FreesiaTour</title>
+        <meta name="description" content={tour.description || `Book ${tour.title} with FreesiaTour in Bali`} />
+      </Helmet>
       <div className="relative h-80">
         <img 
           src={tour.image} 
@@ -2491,7 +2494,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
       const totalUsd = Math.round(isRideBooking ? tour.price : tour.price * (parseInt(formData.travelers as any) || 0));
       const totalIdr = totalUsd * USD_TO_IDR;
       
-      const { db } = await import('./baliquotepro/firebase');
+      const { db } = await import('./firebase');
       const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
       
       const bookingData = {

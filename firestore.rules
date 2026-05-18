@@ -61,10 +61,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Users collection
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
     // Bookings collection
     match /bookings/{bookingId} {
       allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin();
     }
 
     // Admin collection

@@ -47,6 +47,31 @@
         "status": { "type": "string" }
       },
       "required": ["id", "name"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile data",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "displayName", "createdAt"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "User booking data",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "userId": { "type": "string" },
+        "tourId": { "type": "string" },
+        "status": { "type": "string" },
+        "total": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["orderId", "tourId"]
     }
   },
   "firestore": {
@@ -61,6 +86,14 @@
     "activities": {
       "schema": "Activity",
       "description": "Collection of tour activities"
+    },
+    "users": {
+      "schema": "User",
+      "description": "Collection of users"
+    },
+    "bookings": {
+      "schema": "Booking",
+      "description": "Collection of bookings"
     }
   }
 }
