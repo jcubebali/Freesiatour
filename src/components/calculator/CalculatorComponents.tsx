@@ -1219,6 +1219,8 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
         pixelRatio: 3, // Higher quality
         width: A4_WIDTH_PX,
         cacheBust: true,
+        skipFonts: true,
+        fontEmbedCSS: '',
         style: {
           margin: '0',
           padding: '0',

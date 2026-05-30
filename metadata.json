@@ -1,5 +1,8 @@
 {
   "name": "Freesiatour",
   "description": "Premium tour and travel services across Indonesia, based in Bali.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

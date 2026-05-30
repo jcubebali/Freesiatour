@@ -43,13 +43,15 @@ import {
   Bus,
   Map as MapIcon,
   X,
-  Navigation
+  Navigation,
+  ShieldCheck
 } from 'lucide-react';
 import { DESTINATIONS, Tour } from './constants';
 import { APIProvider, Map, useMap, useMapsLibrary, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 import BaliQuoteApp from './components/calculator/App';
-import { fetchTours, fetchActivities, Activity } from './services/firebaseService';
+import { fetchTours, fetchActivities, Activity, fetchSettings } from './services/firebaseService';
 import { ACTIVITIES, VEHICLES_DATA } from './calculatorData';
+import AdminDashboard from './components/AdminDashboard';
 
 const MAP_API_KEY =
   process.env.GOOGLE_MAPS_PLATFORM_KEY ||
@@ -57,7 +59,7 @@ const MAP_API_KEY =
   '';
 const hasValidMapKey = Boolean(MAP_API_KEY) && MAP_API_KEY !== 'YOUR_API_KEY';
 
-const USD_TO_IDR = 16000;
+let USD_TO_IDR = 16000;
 
 type Currency = 'USD' | 'IDR';
 
@@ -70,7 +72,7 @@ function PriceDisplay({ priceUsd, priceIdr, currency }: { priceUsd?: number; pri
   return <span>${Math.round(finalUsd).toLocaleString('en-US')}</span>;
 }
 
-type Screen = 'splash' | 'home' | 'details' | 'booking' | 'about' | 'map' | 'faq' | 'terms' | 'privacy' | 'qr' | 'history' | 'profile' | 'category' | 'calculator';
+type Screen = 'splash' | 'home' | 'details' | 'booking' | 'about' | 'map' | 'faq' | 'terms' | 'privacy' | 'qr' | 'history' | 'profile' | 'category' | 'calculator' | 'admin';
 type SearchTab = 'shuttle' | 'tours' | 'activity';
 
 function TourCard({ tour, onClick, lang, currency }: { tour: Tour; onClick: (t: Tour) => void; lang: 'en' | 'id'; currency: Currency; key?: React.Key }) {
@@ -210,6 +212,7 @@ export default function App() {
   });
   const [lang, setLang] = useState<'en' | 'id'>('en');
   const [currency, setCurrency] = useState<'USD' | 'IDR'>('USD');
+  const [exchangeRate, setExchangeRate] = useState(16000);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -232,9 +235,36 @@ export default function App() {
           return combined;
         });
       }
+
+      // Load settings from firestore
+      const settingsResult = await fetchSettings();
+      if (settingsResult && settingsResult.exchangeRate) {
+        setExchangeRate(settingsResult.exchangeRate);
+        USD_TO_IDR = settingsResult.exchangeRate;
+      }
     };
     loadData();
   }, []);
+
+  // Simple Hash Routing for Admin Area (keeps the portal completely secret from the public sidebar!)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const currentHash = window.location.hash;
+      if (currentHash === '#admin' || currentHash === '#dashboard') {
+        setScreen('admin');
+      } else if (screen === 'admin') {
+        setScreen('home');
+      }
+    };
+
+    // Run on initial load
+    handleHashChange();
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [screen]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -509,6 +539,23 @@ export default function App() {
           />
         )}
 
+        {screen === 'admin' && (
+          <AdminDashboard 
+            onBack={() => {
+              window.location.hash = '';
+              setScreen('home');
+            }} 
+            lang={lang} 
+            onSettingsUpdated={(newRate) => {
+              setExchangeRate(newRate);
+              USD_TO_IDR = newRate;
+              // Re-fetch tours or activities on update
+              fetchTours().then(fetched => fetched.length > 0 && setTours(fetched));
+              fetchActivities().then(fetched => fetched.length > 0 && setActivities(fetched));
+            }}
+          />
+        )}
+
       </AnimatePresence>
 
       <AnimatePresence>
@@ -561,7 +608,7 @@ export default function App() {
                 {[
                   { id: 'home', icon: Home, label: lang === 'id' ? 'Beranda' : 'Home' },
                   { id: 'map', icon: Compass, label: lang === 'id' ? 'Eksplor' : 'Explore' },
-                  { id: 'qr', icon: QrCode, label: 'QR Code' },
+                  { id: 'about', icon: Info, label: lang === 'id' ? 'Tentang Kami' : 'About Us' },
                   { id: 'history', icon: History, label: lang === 'id' ? 'Riwayat' : 'History' },
                   { id: 'profile', icon: User, label: lang === 'id' ? 'Profil' : 'Profile' }
                 ].map((item) => {
@@ -1619,7 +1666,7 @@ function HomeScreen({
                             id: act.id,
                             title: act.name,
                             location: 'Bali',
-                            price: act.price || 0,
+                            price: act.price || (act.price_max_idr ? act.price_max_idr / USD_TO_IDR : (act.price_min_idr ? act.price_min_idr / USD_TO_IDR : 0)),
                             rating: 5.0,
                             reviews: 10,
                             image: act.image || 'https://picsum.photos/seed/activity/800/600',
@@ -2043,11 +2090,20 @@ function HomeScreen({
                   transition={{ duration: 0.6, delay: idx * 0.1, ease: [0.23, 1, 0.32, 1] }}
                   onClick={() => onActivityBook({ 
                     ...activity, 
+                    id: activity.id,
                     title: activity.name, 
-                    priceUsd: activity.price || (activity.price_min_idr / USD_TO_IDR),
+                    location: 'Bali',
+                    price: activity.price || (activity.price_max_idr ? activity.price_max_idr / USD_TO_IDR : (activity.price_min_idr ? activity.price_min_idr / USD_TO_IDR : 0)),
+                    rating: 5.0,
+                    reviews: 10,
+                    image: activity.image || 'https://picsum.photos/seed/activity/800/600',
+                    duration: activity.duration || 'Flexible',
+                    description: activity.description || activity.name,
                     itinerary: [],
                     included: [],
-                    excluded: []
+                    excluded: [],
+                    lat: -8.4095,
+                    lng: 115.1889
                   } as any)}
                   className={`group relative overflow-hidden rounded-[2rem] shadow-lg cursor-pointer ${
                      idx === 0 ? 'row-span-2 col-span-1' : 'col-span-1 row-span-1'
@@ -3371,6 +3427,9 @@ function HistoryScreen({ onBack, currency }: { onBack: () => void, currency: Cur
       className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden"
     >
       <header className="px-6 py-4 flex items-center border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10">
+        <button onClick={onBack} className="mr-4 text-hitam-pekat dark:text-white">
+          <ChevronLeft size={24} />
+        </button>
         <h3 className="dark:text-white text-xl font-bold">Booking History</h3>
       </header>
 
@@ -3423,6 +3482,9 @@ function ProfileScreen({ onBack }: { onBack: () => void }) {
       className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden"
     >
       <header className="px-6 py-4 flex items-center border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10">
+        <button onClick={onBack} className="mr-4 text-hitam-pekat dark:text-white">
+          <ChevronLeft size={24} />
+        </button>
         <h3 className="dark:text-white text-xl font-bold">My Profile</h3>
       </header>
 
