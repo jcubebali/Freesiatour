@@ -48,6 +48,9 @@ export interface QuotationState {
 export interface Settings {
   markupPercentage: number;
   domesticDiscountPercentage: number;
+  exchangeRate: number;
+  mealPriceIdr: number;
+  tourServiceFeeIdr: number;
 }
 
 export const INITIAL_QUOTATION: QuotationState = {
@@ -94,7 +97,13 @@ export const CalculatorProvider: React.FC<{ children: ReactNode }> = ({ children
   const [activities, setActivities] = useState<Activity[]>([...ACTIVITIES] as any[]);
   const [vehicles, setVehicles] = useState<Vehicle[]>(VEHICLES_DATA as any[]);
   const [destinations, setDestinations] = useState<Destination[]>(CALCULATOR_DESTINATIONS as any[]);
-  const [settings, setSettings] = useState<Settings>({ markupPercentage: 20, domesticDiscountPercentage: 10 });
+  const [settings, setSettings] = useState<Settings>({ 
+    markupPercentage: 15, 
+    domesticDiscountPercentage: 2,
+    exchangeRate: 16000,
+    mealPriceIdr: 50000,
+    tourServiceFeeIdr: 250000
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

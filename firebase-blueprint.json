@@ -28,7 +28,10 @@
         "is_free": { "type": "boolean" },
         "areas": { "type": "array", "items": { "type": "string" } },
         "status": { "type": "string" },
-        "updated": { "type": "string" }
+        "updated": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "googleMapsUrl": { "type": "string" }
       },
       "required": ["id", "name"]
     },
@@ -55,7 +58,9 @@
       "properties": {
         "email": { "type": "string" },
         "displayName": { "type": "string" },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "string" },
+        "phone": { "type": "string" },
+        "photoUrl": { "type": "string" }
       },
       "required": ["email", "displayName", "createdAt"]
     },
@@ -67,11 +72,33 @@
         "orderId": { "type": "string" },
         "userId": { "type": "string" },
         "tourId": { "type": "string" },
+        "serviceId": { "type": "string" },
         "status": { "type": "string" },
         "total": { "type": "number" },
-        "createdAt": { "type": "number" }
+        "createdAt": { "type": "string" },
+        "type": { "type": "string" },
+        "bookingType": { "type": "string" },
+        "pickup": { "type": "string" },
+        "dropoff": { "type": "string" },
+        "pickupDate": { "type": "string" },
+        "participants": { "type": "number" },
+        "luggageType": { "type": "string" },
+        "packageType": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "invoiceUrl": { "type": "string" },
+        "driverName": { "type": "string" }
       },
-      "required": ["orderId", "tourId"]
+      "required": ["orderId"]
+    },
+    "Tour": {
+      "title": "Tour",
+      "description": "Tour package details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id"]
     }
   },
   "firestore": {
@@ -94,6 +121,10 @@
     "bookings": {
       "schema": "Booking",
       "description": "Collection of bookings"
+    },
+    "tours": {
+      "schema": "Tour",
+      "description": "Collection of tour packages"
     }
   }
 }

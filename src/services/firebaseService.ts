@@ -128,6 +128,9 @@ export interface Settings {
   id: string;
   markupPercentage: number;
   domesticDiscountPercentage: number;
+  exchangeRate: number;
+  mealPriceIdr: number;
+  tourServiceFeeIdr: number;
 }
 
 export const fetchSettings = async (): Promise<Settings | null> => {

@@ -759,7 +759,7 @@ function RouteDisplay({ pickup, destination, onRouteData }: { pickup: string, de
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
 
   useEffect(() => {
-    if (!routesLib?.Route || !map || !pickup || !destination) return;
+    if (!routesLib?.Route || !map || !pickup || !destination || pickup === 'Bali' || destination === 'Denpasar') return;
 
     // Clear previous route
     polylinesRef.current.forEach(p => p.setMap(null));
@@ -1358,9 +1358,6 @@ function HomeScreen({
                     </div>
 
                     <div className="relative space-y-2 mb-6">
-                       {/* Decorative Line */}
-                       <div className="absolute left-[22px] top-[26px] bottom-[26px] w-[2px] bg-slate-200 dark:bg-slate-700 z-0" />
-                       
                        {/* Location Input (Pickup) */}
                        <LocationAutocomplete 
                           value={pickupQuery}
@@ -2498,11 +2495,19 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
       const totalUsd = Math.round(isRideBooking ? tour.price : tour.price * (parseInt(formData.travelers as any) || 0));
       const totalIdr = totalUsd * USD_TO_IDR;
       
-      const { db } = await import('./firebase');
+      const { db, auth } = await import('./firebase');
       const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      const { signInAnonymously } = await import('firebase/auth');
+      
+      let userId = auth.currentUser?.uid;
+      if (!userId) {
+        const userCredential = await signInAnonymously(auth);
+        userId = userCredential.user.uid;
+      }
       
       const bookingData = {
         orderId,
+        userId,
         tourId: tour.id,
         tourTitle: tour.title,
         customerName: formData.name,
@@ -2541,23 +2546,28 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to get payment token');
       
-      (window as any).snap.pay(data.token, {
-        onSuccess: function(result: any){
-          setIsSubmitting(false);
-          setIsSuccess(true);
-        },
-        onPending: function(result: any){
-          setIsSubmitting(false);
-          setIsSuccess(true);
-        },
-        onError: function(result: any){
-          alert("Payment failed!");
-          setIsSubmitting(false);
-        },
-        onClose: function(){
-          setIsSubmitting(false);
-        }
-      });
+      if ((window as any).snap) {
+        (window as any).snap.pay(data.token, {
+          onSuccess: function(result: any){
+            setIsSubmitting(false);
+            setIsSuccess(true);
+          },
+          onPending: function(result: any){
+            setIsSubmitting(false);
+            setIsSuccess(true);
+          },
+          onError: function(result: any){
+            alert("Payment failed!");
+            setIsSubmitting(false);
+          },
+          onClose: function(){
+            setIsSubmitting(false);
+          }
+        });
+      } else {
+        alert("Payment system not initialized. Please try again.");
+        setIsSubmitting(false);
+      }
       
     } catch (err) {
       console.error(err);

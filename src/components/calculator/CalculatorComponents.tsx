@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toJpeg } from 'html-to-image';
 import jsPDF from 'jspdf';
+// import html2canvas from 'html2canvas'; // html2canvas doesn't support oklch colors yet
 import { 
   Users, 
   Map as MapIcon, 
@@ -42,77 +43,101 @@ interface StepProps {
   currency: 'USD' | 'IDR';
 }
 
-const formatCurrency = (amount: number, currency: 'USD' | 'IDR') => {
+const formatCurrency = (amountIdr: number, currency: 'USD' | 'IDR', exchangeRate: number = 16000) => {
   if (currency === 'IDR') {
-    return `IDR ${(amount * 16000).toLocaleString('id-ID')}`;
+    return `IDR ${amountIdr.toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;
   }
-  return `USD ${amount.toLocaleString('en-US')}`;
+  return `USD ${Math.round(amountIdr / exchangeRate).toLocaleString('en-US')}`;
 };
 
 export const getQuotationTotalParts = (quotation: QuotationState, activities: any[], vehicles: any[], destinations: any[], settings: Settings) => {
   const hotel = HOTEL_OPTIONS.find(h => h.id === quotation.hotelId);
   const vehicle = vehicles.find(v => v.id === quotation.vehicleId);
   
-  const hotelCost = hotel ? hotel.price * quotation.hotelNights * quotation.hotelRooms : 0;
-  
-  let mealPricePerPaxDay = 0;
-  if (quotation.mealType === 'Breakfast') mealPricePerPaxDay = 10;
-  if (quotation.mealType === 'Lunch') mealPricePerPaxDay = 15;
-  if (quotation.mealType === 'Both') mealPricePerPaxDay = 25;
-  const mealCost = mealPricePerPaxDay * quotation.pax * quotation.duration;
-  
-  const vehicleCost = vehicle ? vehicle.rate_with_driver_idr / 16000 * quotation.duration : 0; // Convert to USD for calculation consisteny if needed
-  
-  // Package base service fee
-  const packageBase = quotation.packageType === 'Budget' ? 20 : quotation.packageType === 'Luxury' ? 100 : 50;
+  // Check if any selections are made
   const hasSelections = !!(
-    (quotation.hotelId && quotation.hotelId !== '') || 
-    (quotation.vehicleId && quotation.vehicleId !== '') || 
-    (quotation.itinerary && quotation.itinerary.some(d => d.destinations && d.destinations.length > 0)) || 
-    (quotation.addons && quotation.addons.length > 0) || 
-    (quotation.customAddons && quotation.customAddons.length > 0) || 
-    (quotation.mealType && quotation.mealType !== 'None' && quotation.mealType !== undefined) ||
-    quotation.airportTransfer === true
+    quotation.hotelId || 
+    quotation.vehicleId || 
+    quotation.mealType !== 'None' ||
+    quotation.itinerary.some(day => day.destinations.length > 0) ||
+    quotation.addons.length > 0 ||
+    quotation.customAddons.length > 0
   );
-  let destinationCost = 0;
+
+  // 1. Accommodation (Hotel)
+  // Assume hotel.price is currently in USD based on values (35, 75, 180)
+  // Logic from prompt: Harga Per Malam * Jumlah Malam * Jumlah Kamar
+  const hotelPriceIdr = (hotel?.price || 0) * (hotel?.price < 1000 ? settings.exchangeRate : 1);
+  const hotelCostIdr = hotelPriceIdr * quotation.hotelNights * quotation.hotelRooms;
+  
+  // 2. Consumption (Meals)
+  // Rumus: Harga Per Makan * Jumlah Pax * Jumlah Hari * Multiplier
+  // Multiplier: Lunch only = 1, Both = 2
+  let mealMultiplier = 0;
+  if (quotation.mealType === 'Lunch') mealMultiplier = 1;
+  if (quotation.mealType === 'Both') mealMultiplier = 2;
+  const mealCostIdr = settings.mealPriceIdr * quotation.pax * quotation.duration * mealMultiplier;
+  
+  // 3. Transportation (Vehicle)
+  // Rumus: Harga Sewa Per Hari * Jumlah Hari
+  const vehicleCostIdr = vehicle ? (vehicle.rate_with_driver_idr || 0) * quotation.duration : 0;
+  
+  // 4. Jenis Tur (Tour Type)
+  // Rumus: Harga Layanan Per Hari * Jumlah Hari
+  // Only apply if any selection is made or it's implicitly part of the package
+  const tourServiceCostIdr = hasSelections ? settings.tourServiceFeeIdr * quotation.duration : 0;
+
+  // 5. Destinasi (Entrance Fees)
+  // Rumus: Total (Harga Tiket Masuk Per Objek * Jumlah Pax)
+  let destinationCostIdr = 0;
   quotation.itinerary.forEach((day: any) => {
     day.destinations.forEach((destId: string) => {
       const dest = destinations.find(d => d.id === destId);
-      if (dest) destinationCost += dest.price * quotation.pax;
+      if (dest) {
+        destinationCostIdr += (dest.entrance_fee_idr || (dest.price * 15000)) * quotation.pax;
+      }
     });
   });
   
-  let addonsCost = 0;
+  // 6. Aktivitas Tambahan (Addons)
+  // Rumus: Total (Harga Aktivitas * Jumlah Pax)
+  let addonsCostIdr = 0;
   quotation.addons.forEach((addonId: string) => {
     const activity = activities.find(a => a.id === addonId);
-    if (activity) addonsCost += (activity.price || activity.price_min_idr / 16000) * quotation.pax;
+    if (activity) {
+      addonsCostIdr += (activity.price_min_idr || (activity.price * 16000)) * quotation.pax;
+    }
   });
 
   quotation.customAddons.forEach(ca => {
-    addonsCost += ca.price;
+    addonsCostIdr += ca.price;
   });
 
-  const baseCosts = hotelCost + mealCost + vehicleCost + destinationCost + addonsCost;
-  const serviceFee = (hasSelections && (baseCosts > 0 || quotation.airportTransfer)) ? (packageBase * quotation.duration * quotation.pax) : 0;
+  // Total Nett
+  const totalNettIdr = hotelCostIdr + mealCostIdr + vehicleCostIdr + tourServiceCostIdr + destinationCostIdr + addonsCostIdr;
   
-  const nett = baseCosts + serviceFee;
-  const markup = (nett * settings.markupPercentage) / 100;
-  const gross = nett + markup;
+  // 2. Markup & Diskon
+  // Total Harga = Total Nett * (1 + Markup% - Diskon%)
+  const markupRate = settings.markupPercentage / 100;
+  const discountRate = quotation.origin === 'Domestic' ? (settings.domesticDiscountPercentage / 100) : 0;
   
-  const domesticDiscount = quotation.origin === 'Domestic' ? (gross * settings.domesticDiscountPercentage) / 100 : 0;
-  const total = gross - domesticDiscount;
+  const markupAmountIdr = totalNettIdr * markupRate;
+  const discountAmountIdr = totalNettIdr * discountRate;
+  
+  const finalMultiplier = 1 + markupRate - discountRate;
+  const totalIdr = totalNettIdr * finalMultiplier;
 
   return { 
-    hotelCost,
-    mealCost,
-    vehicleCost,
-    destinationCost,
-    addonsCost,
-    serviceFee,
-    nett, 
-    markup, 
-    domesticDiscount, 
-    total 
+    hotelCost: hotelCostIdr,
+    mealCost: mealCostIdr,
+    vehicleCost: vehicleCostIdr,
+    tourServiceCost: tourServiceCostIdr,
+    destinationCost: destinationCostIdr,
+    addonsCost: addonsCostIdr,
+    nett: totalNettIdr, 
+    markup: markupAmountIdr,
+    domesticDiscount: discountAmountIdr,
+    total: totalIdr 
   };
 };
 
@@ -155,7 +180,8 @@ export const Step1Guest: React.FC<StepProps> = ({ onNext, lang, currency }) => {
   const isFormValid = quotation.guestName && quotation.guestPhone && quotation.guestEmail;
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500 pb-[120px]">
+    <>
+      <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500 pb-[120px]">
       <div className="text-left mb-4">
         <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <span className="text-[#E87230]">01</span>
@@ -266,7 +292,7 @@ export const Step1Guest: React.FC<StepProps> = ({ onNext, lang, currency }) => {
               {lang === 'id' ? 'TOTAL BIAYA' : 'TOTAL COST'}
             </div>
             <div className="text-xl sm:text-2xl font-black text-bali-orange tracking-tight">
-              {formatCurrency(getQuotationTotalParts(quotation, [], [], [], settings).total, currency)}
+              {formatCurrency(getQuotationTotalParts(quotation, [], [], [], settings).total, currency, settings.exchangeRate)}
             </div>
           </div>
           <div className="flex gap-2">
@@ -285,18 +311,20 @@ export const Step1Guest: React.FC<StepProps> = ({ onNext, lang, currency }) => {
         </div>
       </div>
     </div>
-  );
+  </>
+);
 };
 
 export const Step2Preferences: React.FC<StepProps> = ({ onNext, onPrev, lang, currency }) => {
-  const { quotation, setQuotation, vehicles } = useCalculator();
+  const { quotation, setQuotation, vehicles, settings } = useCalculator();
 
   const handleUpdate = (field: string, value: any) => {
     setQuotation({ ...quotation, [field]: value });
   };
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500 pb-[120px]">
+    <>
+      <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500 pb-[120px]">
       <div className="text-left mb-4">
         <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <span className="text-[#E87230]">02</span>
@@ -327,7 +355,7 @@ export const Step2Preferences: React.FC<StepProps> = ({ onNext, onPrev, lang, cu
                 <div className="font-semibold text-base text-slate-800 dark:text-white">{opt.name}</div>
                 <div className="text-xs text-slate-500 mt-1 line-clamp-2">{opt.description}</div>
             <div className="mt-3 text-bali-orange font-bold text-sm">
-                  {formatCurrency(opt.price, currency)} <span className="text-xs font-normal text-slate-500">/ {lang === 'id' ? 'Malam' : 'Night'}</span>
+                  {formatCurrency(opt.price * settings.exchangeRate, currency, settings.exchangeRate)} <span className="text-xs font-normal text-slate-500">/ {lang === 'id' ? 'Malam' : 'Night'}</span>
                 </div>
               </button>
             ))}
@@ -471,7 +499,7 @@ export const Step2Preferences: React.FC<StepProps> = ({ onNext, onPrev, lang, cu
               {lang === 'id' ? 'TOTAL BIAYA' : 'TOTAL COST'}
             </div>
             <div className="text-xl sm:text-2xl font-black text-bali-orange tracking-tight">
-              {formatCurrency(getQuotationTotalParts(quotation, [], vehicles, [], { markupPercentage: 20, domesticDiscountPercentage: 10 }).total, currency)}
+              {formatCurrency(getQuotationTotalParts(quotation, [], vehicles, [], settings).total, currency, settings.exchangeRate)}
             </div>
           </div>
           <div className="flex gap-2">
@@ -491,7 +519,8 @@ export const Step2Preferences: React.FC<StepProps> = ({ onNext, onPrev, lang, cu
         </div>
       </div>
     </div>
-  );
+  </>
+);
 };
 
 export const Step3Itinerary: React.FC<StepProps> = ({ onNext, onPrev, lang, currency }) => {
@@ -596,7 +625,8 @@ export const Step3Itinerary: React.FC<StepProps> = ({ onNext, onPrev, lang, curr
   const hasMore = visibleCount < filteredDestinations.length;
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500 pb-[120px]">
+    <>
+      <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500 pb-[120px]">
       <div className="text-left mb-4">
         <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <span className="text-[#E87230]">03</span>
@@ -827,7 +857,7 @@ export const Step3Itinerary: React.FC<StepProps> = ({ onNext, onPrev, lang, curr
               {lang === 'id' ? 'TOTAL BIAYA' : 'TOTAL COST'}
             </div>
             <div className="text-xl sm:text-2xl font-black text-bali-orange tracking-tight">
-              {formatCurrency(total, currency)}
+              {formatCurrency(total, currency, settings.exchangeRate)}
             </div>
           </div>
           <div className="flex gap-2">
@@ -847,7 +877,8 @@ export const Step3Itinerary: React.FC<StepProps> = ({ onNext, onPrev, lang, curr
         </div>
       </div>
     </div>
-  );
+  </>
+);
 };
 
 export const Step4Addons: React.FC<StepProps> = ({ onNext, onPrev, lang, currency }) => {
@@ -909,7 +940,8 @@ export const Step4Addons: React.FC<StepProps> = ({ onNext, onPrev, lang, currenc
   const currentTotal = parts.total;
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500 pb-[120px]">
+    <>
+      <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500 pb-[120px]">
       <div className="text-left mb-4">
         <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <span className="text-[#E87230]">04</span>
@@ -1030,7 +1062,7 @@ export const Step4Addons: React.FC<StepProps> = ({ onNext, onPrev, lang, currenc
               <div key={ca.id} className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 p-4 rounded-2xl flex items-center justify-between shadow-sm">
                 <div>
                   <div className="font-bold text-sm text-slate-800 dark:text-white mb-0.5">{ca.name}</div>
-                  <div className="text-xs font-semibold text-bali-orange">{formatCurrency(ca.price / 16000, currency)}</div>
+                  <div className="text-xs font-semibold text-bali-orange">{formatCurrency(ca.price, currency, settings.exchangeRate)}</div>
                 </div>
                 <button onClick={() => removeCustomAddon(ca.id)} className="w-8 h-8 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors">
                   <X size={16} />
@@ -1061,7 +1093,7 @@ export const Step4Addons: React.FC<StepProps> = ({ onNext, onPrev, lang, currenc
               {lang === 'id' ? 'TOTAL BIAYA' : 'TOTAL COST'}
             </div>
             <div className="text-xl sm:text-2xl font-black text-bali-orange tracking-tight">
-              {formatCurrency(currentTotal, currency)}
+              {formatCurrency(currentTotal, currency, settings.exchangeRate)}
             </div>
           </div>
           <div className="flex gap-2">
@@ -1081,7 +1113,8 @@ export const Step4Addons: React.FC<StepProps> = ({ onNext, onPrev, lang, currenc
         </div>
       </div>
     </div>
-  );
+  </>
+);
 };
 
 export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id', currency: 'USD' | 'IDR' }> = ({ onReset, lang, currency }) => {
@@ -1122,7 +1155,7 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
       `- Layanan Makan: ${quotation.mealType} (${quotation.mealPackage || 'N/A'})\n` +
       `- Transfer Bandara: ${quotation.airportTransfer ? 'Ya' : 'Tidak'}\n` +
       `- Biaya Tambahan: ${allAddons}\n` +
-      `- Total Biaya: *${formatCurrency(parts.total, currency)}*\n\n` +
+      `- Total Biaya: *${formatCurrency(parts.total, currency, settings.exchangeRate)}*\n\n` +
       `🗺️ *Rencana Perjalanan*\n` +
       `${itinerarySummary}\n\n` +
       (quotation.notes ? `📝 *Catatan:* ${quotation.notes}\n\n` : ``) +
@@ -1140,39 +1173,97 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
     if (!element) return;
     
     setIsExporting(true);
+    
+    // Total A4 dimensions @ 96 DPI
+    const A4_WIDTH_PX = 794; 
+    const A4_HEIGHT_PX = 1123;
+    
+    const originalStyle = {
+      width: element.style.width,
+      maxWidth: element.style.maxWidth,
+      minHeight: element.style.minHeight,
+      height: element.style.height,
+      padding: element.style.padding,
+      borderRadius: element.style.borderRadius,
+      boxShadow: element.style.boxShadow,
+      border: element.style.border,
+      margin: element.style.margin,
+      position: element.style.position,
+      top: element.style.top,
+      left: element.style.left,
+      transition: element.style.transition
+    };
+
     try {
-      // Use html-to-image to capture the element, bypassing oklch parsing issues in html2canvas
+      // Remove transitions and shadows for capture
+      Object.assign(element.style, {
+        transition: 'none',
+        boxShadow: 'none',
+        borderRadius: '0',
+        border: 'none',
+        margin: '0',
+        width: `${A4_WIDTH_PX}px`,
+        maxWidth: `${A4_WIDTH_PX}px`,
+        minHeight: `${A4_HEIGHT_PX}px`,
+        height: 'auto',
+        padding: '0' 
+      });
+
+      // Wait for layout shift
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      // Use toJpeg from html-to-image (supports oklch better)
       const imgData = await toJpeg(element, {
-        quality: 0.95,
+        quality: 1,
         backgroundColor: '#ffffff',
-        pixelRatio: 2,
-        width: 794,
-        style: { width: '794px' }
+        pixelRatio: 3, // Higher quality
+        width: A4_WIDTH_PX,
+        cacheBust: true,
+        style: {
+          margin: '0',
+          padding: '0',
+          transform: 'none',
+          transition: 'none'
+        }
       });
       
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      // Calculate sizing
       const img = new Image();
       img.src = imgData;
       await new Promise(resolve => img.onload = resolve);
       
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (img.height * pdfWidth) / img.width;
+      // img.width is A4_WIDTH_PX * 3 (pixelRatio)
+      const imgW = img.width / 3;
+      const imgH = img.height / 3;
       
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      const ratio = pdfWidth / imgW;
+      const finalHeight = imgH * ratio;
+
+      // Add to PDF
+      // If content is very long, it will be scaled to fit width.
+      // We can also handle multi-page if needed, but usually one page is desired for a summary.
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, finalHeight, undefined, 'FAST');
       
       const guestName = quotation.guestName ? `_${quotation.guestName.replace(/\s+/g, '_')}` : '';
       pdf.save(`Freesiatour_Quotation${guestName}.pdf`);
     } catch (error) {
       console.error("PDF Export failed:", error);
-      // Fallback to window.print if jsPDF fails
       window.print();
     } finally {
+      if (element) {
+        Object.assign(element.style, originalStyle);
+      }
       setIsExporting(false);
     }
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 pb-32 max-w-4xl mx-auto w-full relative">
+    <>
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 pb-32 max-w-4xl mx-auto w-full relative">
       <style>{`
         @media print {
           @page {
@@ -1207,7 +1298,11 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
       `}</style>
       
       {/* Paper Container */}
-      <div id="quotation-document" className="bg-white text-slate-900 shadow-2xl rounded-xl border border-slate-200 overflow-hidden print:shadow-none print:border-none print:m-0 relative">
+      <div 
+        id="quotation-document" 
+        className={`bg-white text-slate-900 shadow-2xl rounded-xl border border-slate-200 overflow-hidden print:shadow-none print:border-none print:m-0 relative ${!isExporting ? 'transition-all duration-300 w-full' : 'w-[794px]'}`}
+        style={{ minHeight: isExporting ? '1123px' : 'auto' }}
+      >
         {/* Full Page Watermark */}
         <div className="absolute inset-0 pointer-events-none flex flex-col justify-around items-center opacity-[0.04] select-none z-0 overflow-hidden py-10">
           {[1,2,3,4,5,6,7,8].map(i => (
@@ -1225,102 +1320,104 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
             </div>
           ))}
         </div>
-
-        <div className="p-5 sm:p-8 space-y-8 relative z-10">
+        
+        {/* Content Wrapper */}
+        <div className="p-4 sm:p-6 space-y-6 relative z-10">
           {/* Document Header */}
           <div className="flex justify-between items-start gap-4">
-            <div className="flex gap-4 items-center">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white shadow-xl shadow-orange-500/5 flex items-center justify-center rounded-2xl shrink-0 border border-slate-100">
+            <div className="flex gap-3 items-center">
+              <div className="w-12 h-12 bg-white shadow-xl shadow-orange-500/5 flex items-center justify-center rounded-xl shrink-0 border border-slate-100">
                 <img 
                   src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771789006/freesiatour_logo.png" 
                   alt="Freesiatour Logo" 
-                  className="w-full h-full object-contain p-2 sm:p-2.5"
+                  className="w-full h-full object-contain p-2"
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <div className="flex flex-col -space-y-1">
-                <h1 className="font-display text-xl sm:text-2xl font-black tracking-tighter text-slate-900 leading-none">Freesiatour</h1>
-                <p className="font-display text-[8px] sm:text-[9px] font-black text-[#E87230] tracking-[0.05em] uppercase">Holiday is friendly</p>
+              <div className="flex flex-col -space-y-0.5">
+                <h1 className="font-display text-lg font-black tracking-tighter text-slate-900 leading-none">Freesiatour</h1>
+                <p className="font-display text-[8px] font-black text-[#E87230] tracking-[0.05em] uppercase">Holiday is friendly</p>
               </div>
             </div>
             
-            <div className="text-right flex flex-col items-end gap-2">
-              <div className="bg-[#E87230] px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl border-b-4 border-orange-700 shadow-xl shadow-orange-500/20">
-                <span className="text-base sm:text-lg font-black text-white uppercase tracking-tight leading-none block">Quotation</span>
+            <div className="text-right">
+              <div className="bg-[#E87230] px-4 py-1.5 rounded-lg border-b-2 border-orange-700">
+                <span className="text-sm font-black text-white uppercase tracking-tight leading-none block">
+                  {lang === 'id' ? 'Penawaran Harga' : 'Quotation'}
+                </span>
               </div>
-              <div className="h-0.5 w-32 bg-slate-900 mt-1" />
             </div>
           </div>
 
-          {/* Guest/Trip Info Section - New Redesigned Layout */}
-          <div className="border-2 border-slate-100 rounded-[2.5rem] p-8 space-y-8 bg-white relative overflow-hidden shadow-sm">
-             {/* Reference Info at top right */}
-             <div className="absolute top-8 right-8 text-right space-y-1">
-                <div className="text-xs font-black text-slate-900 tracking-tight">{quoteNo}</div>
-                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{formattedDate}</div>
+          {/* Guest/Trip Info - Redesigned Compact Layout */}
+          <div className="border border-slate-200 rounded-2xl p-6 space-y-6 bg-white relative shadow-sm">
+             {/* Reference Info */}
+             <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
+                <div>{quoteNo}</div>
+                <div>{formattedDate}</div>
              </div>
 
-             {/* Guest Info Left */}
-             <div className="space-y-3">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">
-                   <span className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
-                   GUEST INFORMATION
+             {/* Guest Info */}
+             <div className="space-y-1">
+                <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                  {lang === 'id' ? 'Nama Tamu' : 'Guest'}
                 </h3>
-                <div className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-                   {quotation.guestName || 'Guest Name'}
+                <div className="text-2xl font-black text-slate-900 tracking-tight">
+                   {quotation.guestName || (lang === 'id' ? 'Nama Tamu' : 'Guest Name')}
                 </div>
              </div>
 
-             <div className="h-px bg-slate-100 w-full" />
-
-             {/* Bottom row: Trip Summary Title and Grid */}
-             <div className="space-y-6">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] flex items-center gap-2">
-                   <span className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
-                   TRIP SUMMARY
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-6">
-                   <div className="space-y-1.5">
-                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">PARTICIPANTS</div>
-                      <div className="text-lg font-black text-slate-900">{quotation.pax} Pax</div>
+             {/* Trip Summary Grid */}
+             <div className="grid grid-cols-4 gap-4 border-t border-slate-100 pt-4">
+                <div className="space-y-0.5">
+                   <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
+                     {lang === 'id' ? 'Tamu' : 'Pax'}
                    </div>
-                   <div className="space-y-1.5">
-                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">DURATION</div>
-                      <div className="text-lg font-black text-slate-900">{quotation.duration} Days</div>
+                   <div className="text-sm font-black text-slate-900">{quotation.pax}</div>
+                </div>
+                <div className="space-y-0.5">
+                   <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
+                     {lang === 'id' ? 'Hari' : 'Days'}
                    </div>
-                   <div className="space-y-1.5">
-                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">START DATE</div>
-                      <div className="text-lg font-black text-slate-900 uppercase">{formattedDate}</div>
+                   <div className="text-sm font-black text-slate-900">{quotation.duration}</div>
+                </div>
+                <div className="space-y-0.5">
+                   <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
+                     {lang === 'id' ? 'Mulai' : 'Start'}
                    </div>
-                   <div className="space-y-1.5">
-                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">TOUR TYPE</div>
-                      <div className="text-lg font-black text-slate-900">{quotation.tourType}</div>
+                   <div className="text-sm font-black text-slate-900">{formattedDate}</div>
+                </div>
+                <div className="space-y-0.5">
+                   <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
+                     {lang === 'id' ? 'Tipe' : 'Type'}
                    </div>
+                   <div className="text-sm font-black text-slate-900">{quotation.tourType}</div>
                 </div>
              </div>
-          </div>
-
-
-          {/* Itinerary Table */}
-          <div className="space-y-2">
-             <div className="grid grid-cols-[50px_1fr_90px] pb-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] border-b-2 border-slate-900">
-                <div>DAY</div>
-                <div>ITINERARY DESCRIPTION</div>
-                <div className="text-right">AREA</div>
+                 {/* Itinerary Table */}
+          <div className="space-y-1">
+             <div className="grid grid-cols-[40px_1fr_60px] pb-1 text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] border-b-2 border-slate-900">
+                <div>{lang === 'id' ? 'HARI' : 'DAY'}</div>
+                <div>{lang === 'id' ? 'DESKRIPSI PERJALANAN' : 'ITINERARY DESCRIPTION'}</div>
+                <div className="text-right">{lang === 'id' ? 'AREA' : 'AREA'}</div>
              </div>
              <div className="divide-y divide-slate-100">
                {quotation.itinerary.length > 0 ? (
                  quotation.itinerary.map((day, idx) => (
-                   <div key={idx} className="grid grid-cols-[50px_1fr_90px] py-2 items-start hover:bg-slate-50/50 transition-colors px-1 -mx-1 rounded-lg">
-                     <div className="text-xs font-black text-slate-900 whitespace-nowrap">Day {day.day}</div>
-                     <div className="text-[11px] text-slate-600 font-bold leading-tight pr-4">
-                       {day.destinations.map(did => destinations.find(d => d.id === did)?.name).filter(Boolean).join(' • ') || 'Free Program / Custom Activity'}
+                   <div key={idx} className="grid grid-cols-[40px_1fr_60px] py-1.5 items-start hover:bg-slate-50/50 transition-colors px-1 -mx-1 rounded-lg">
+                     <div className="text-[10px] font-black text-slate-900 whitespace-nowrap pt-0.5">
+                       {lang === 'id' ? 'Hari' : 'Day'} {day.day}
                      </div>
-                     <div className="text-[8px] font-black text-slate-400 text-right uppercase tracking-[0.1em] pt-0.5">{day.area || '-'}</div>
+                     <div className="text-[10px] text-slate-600 font-bold leading-tight pr-4">
+                       {day.destinations.map(did => destinations.find(d => d.id === did)?.name).filter(Boolean).join(' • ') || (lang === 'id' ? 'Program Bebas / Aktivitas Kustom' : 'Free Program / Custom Activity')}
+                     </div>
+                     <div className="text-[7px] font-black text-slate-400 text-right uppercase tracking-[0.1em] pt-0.5">{day.area || '-'}</div>
                    </div>
                  ))
                ) : (
-                 <div className="py-4 text-center text-xs font-bold text-slate-400 italic">No itinerary planned yet.</div>
+                 <div className="py-2 text-center text-[10px] font-bold text-slate-400 italic">
+                   {lang === 'id' ? 'Belum ada jadwal yang direncanakan.' : 'No itinerary planned yet.'}
+                 </div>
                )}
              </div>
           </div>
@@ -1328,32 +1425,38 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
           <div className="h-px bg-slate-100 w-full" />
 
           {/* Details & Inclusions */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
-            <div className="space-y-6">
+          <div className={`grid grid-cols-1 ${isExporting ? 'grid-cols-[1fr_260px]' : 'lg:grid-cols-[1fr_260px]'} gap-4`}>
+            <div className="space-y-4">
               {/* Accommodation & Transport */}
               <div className="flex flex-wrap gap-2">
-                 <div className="flex-1 min-w-[150px] p-3 bg-slate-50/50 rounded-xl border border-slate-100 space-y-0.5">
-                    <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">ACCOMMODATION</div>
-                    <div className="text-[11px] font-black text-slate-900">
-                      {HOTEL_OPTIONS.find(h => h.id === quotation.hotelId)?.name || 'No Accommodation'}
+                 <div className="flex-1 min-w-[140px] p-2 bg-slate-50/50 rounded-lg border border-slate-100 space-y-0">
+                    <div className="text-[6px] font-bold text-slate-400 uppercase tracking-widest">
+                      {lang === 'id' ? 'AKOMODASI' : 'ACCOMMODATION'}
+                    </div>
+                    <div className="text-[10px] font-black text-slate-900">
+                      {HOTEL_OPTIONS.find(h => h.id === quotation.hotelId)?.name || (lang === 'id' ? 'Tanpa Akomodasi' : 'No Accommodation')}
                     </div>
                  </div>
-                 <div className="flex-1 min-w-[150px] p-3 bg-slate-50/50 rounded-xl border border-slate-100 space-y-0.5">
-                    <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">TRANSPORT</div>
-                    <div className="text-[11px] font-black text-slate-900">
-                      {vehicles.find(v => v.id === quotation.vehicleId)?.vehicle || 'No Vehicle'}
+                 <div className="flex-1 min-w-[140px] p-2 bg-slate-50/50 rounded-lg border border-slate-100 space-y-0">
+                    <div className="text-[6px] font-bold text-slate-400 uppercase tracking-widest">
+                      {lang === 'id' ? 'TRANSPORTASI' : 'TRANSPORT'}
+                    </div>
+                    <div className="text-[10px] font-black text-slate-900">
+                      {vehicles.find(v => v.id === quotation.vehicleId)?.vehicle || (lang === 'id' ? 'Tanpa Kendaraan' : 'No Vehicle')}
                     </div>
                  </div>
               </div>
 
               {/* Inclusions / Exclusions */}
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-2">
-                   <div className="flex items-center gap-1.5 text-emerald-600">
-                      <CheckCircle2 size={12} className="bg-emerald-50 rounded-full" />
-                      <span className="text-[9px] font-black uppercase tracking-[0.2em]">INCLUSIONS</span>
+              <div className="grid grid-cols-2 gap-2">
+                 <div className="space-y-1">
+                   <div className="flex items-center gap-1 text-emerald-600">
+                      <CheckCircle2 size={10} className="bg-emerald-50 rounded-full" />
+                      <span className="text-[8px] font-black uppercase tracking-[0.2em]">
+                        {lang === 'id' ? 'TERMASUK' : 'INCLUSIONS'}
+                      </span>
                    </div>
-                   <ul className="space-y-1">
+                   <ul className="space-y-0.5">
                      {[
                        'Private AC Transportation',
                        'Fuel & Parking Fees',
@@ -1361,26 +1464,28 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
                        'Entrance Tickets',
                        'Daily Mineral Water'
                      ].map((item, i) => (
-                       <li key={i} className="text-[9px] text-slate-500 font-bold flex items-start gap-2">
+                       <li key={i} className="text-[8px] text-slate-500 font-bold flex items-start gap-1.5">
                          <span className="w-1 h-1 bg-emerald-500 rounded-full mt-1 shrink-0" />
                          <span>{item}</span>
                        </li>
                      ))}
                    </ul>
                  </div>
-                 <div className="space-y-2">
-                   <div className="flex items-center gap-1.5 text-rose-500">
-                      <XCircle size={12} className="bg-rose-50 rounded-full" />
-                      <span className="text-[9px] font-black uppercase tracking-[0.2em]">EXCLUSIONS</span>
+                 <div className="space-y-1">
+                   <div className="flex items-center gap-1 text-rose-500">
+                      <XCircle size={10} className="bg-rose-50 rounded-full" />
+                      <span className="text-[8px] font-black uppercase tracking-[0.2em]">
+                        {lang === 'id' ? 'TIDAK TERMASUK' : 'EXCLUSIONS'}
+                      </span>
                    </div>
-                   <ul className="space-y-1">
+                   <ul className="space-y-0.5">
                      {[
                        'Airfare Tickets',
                        'Personal Expenses',
                        'Tipping (Optional)',
                        'Travel Insurance'
                      ].map((item, i) => (
-                       <li key={i} className="text-[9px] text-slate-500 font-bold flex items-start gap-2">
+                       <li key={i} className="text-[8px] text-slate-500 font-bold flex items-start gap-1.5">
                           <span className="w-1 h-1 bg-rose-400 rounded-full mt-1 shrink-0" />
                           <span>{item}</span>
                        </li>
@@ -1391,126 +1496,142 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
             </div>
 
             {/* Pricing Section */}
-            <div className="space-y-4">
-               <div className="bg-white rounded-3xl p-6 border-2 border-slate-900 space-y-4 relative overflow-hidden">
+            <div className="space-y-2">
+               <div className="bg-white rounded-2xl p-4 border-2 border-slate-900 space-y-2 relative overflow-hidden">
                   <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#E87230]/5 rounded-full blur-2xl" />
                   
-                  <div className="space-y-4 z-10 relative">
+                  <div className="space-y-2 z-10 relative">
                      {/* Cost Breakdown */}
-                     <div className="space-y-2 pb-4 border-b border-slate-100">
-                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">{lang === 'id' ? 'RINCIAN BIAYA' : 'COST BREAKDOWN'}</div>
+                     <div className="space-y-1 pb-2 border-b border-slate-100">
+                        <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'id' ? 'RINCIAN BIAYA' : 'COST BREAKDOWN'}</div>
                         
                         {parts.hotelCost > 0 && (
-                          <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-slate-500 font-medium">Hotel ({quotation.hotelRooms} Room, {quotation.hotelNights} Night)</span>
-                            <span className="font-bold text-slate-900">{formatCurrency(parts.hotelCost, currency)}</span>
+                          <div className="flex justify-between items-center text-[9px]">
+                            <span className="text-slate-500 font-medium">Hotel ({quotation.hotelRooms} {lang === 'id' ? 'Kamar' : 'Room'}, {quotation.hotelNights} {lang === 'id' ? 'Malam' : 'Night'})</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.hotelCost, currency, settings.exchangeRate)}</span>
                           </div>
                         )}
                         {parts.vehicleCost > 0 && (
-                          <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-slate-500 font-medium">Transport ({quotation.duration} Days)</span>
-                            <span className="font-bold text-slate-900">{formatCurrency(parts.vehicleCost, currency)}</span>
+                          <div className="flex justify-between items-center text-[9px]">
+                            <span className="text-slate-500 font-medium">Transport ({quotation.duration} {lang === 'id' ? 'Hari' : 'Days'})</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.vehicleCost, currency, settings.exchangeRate)}</span>
                           </div>
                         )}
                         {parts.destinationCost > 0 && (
-                          <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-slate-500 font-medium">Destinations & Tickets</span>
-                            <span className="font-bold text-slate-900">{formatCurrency(parts.destinationCost, currency)}</span>
+                          <div className="flex justify-between items-center text-[9px]">
+                            <span className="text-slate-500 font-medium">{lang === 'id' ? 'Destinasi & Tiket' : 'Destinations & Tickets'}</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.destinationCost, currency, settings.exchangeRate)}</span>
                           </div>
                         )}
                         {parts.addonsCost > 0 && (
-                          <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-slate-500 font-medium">Activities & Extras</span>
-                            <span className="font-bold text-slate-900">{formatCurrency(parts.addonsCost, currency)}</span>
+                          <div className="flex justify-between items-center text-[9px]">
+                            <span className="text-slate-500 font-medium">{lang === 'id' ? 'Aktivitas & Ekstra' : 'Activities & Extras'}</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.addonsCost, currency, settings.exchangeRate)}</span>
                           </div>
                         )}
                         {parts.mealCost > 0 && (
-                          <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-slate-500 font-medium">Meals ({quotation.mealType})</span>
-                            <span className="font-bold text-slate-900">{formatCurrency(parts.mealCost, currency)}</span>
+                          <div className="flex justify-between items-center text-[9px]">
+                            <span className="text-slate-500 font-medium">{lang === 'id' ? 'Makan' : 'Meals'} ({quotation.mealType})</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.mealCost, currency, settings.exchangeRate)}</span>
                           </div>
                         )}
-                        {parts.serviceFee > 0 && (
-                          <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-slate-500 font-medium">Package Service Fee ({quotation.packageType})</span>
-                            <span className="font-bold text-slate-900">{formatCurrency(parts.serviceFee, currency)}</span>
+                        {parts.tourServiceCost > 0 && (
+                          <div className="flex justify-between items-center text-[9px]">
+                            <span className="text-slate-500 font-medium">{lang === 'id' ? 'Biaya Layanan Tiket & Operasional' : 'Tour Service & Operational Fee'}</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.tourServiceCost, currency, settings.exchangeRate)}</span>
                           </div>
                         )}
                         {parts.markup > 0 && (
-                          <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-slate-500 font-medium">Platform / Margin ({settings.markupPercentage}%)</span>
-                            <span className="font-bold text-slate-900">{formatCurrency(parts.markup, currency)}</span>
+                          <div className="flex justify-between items-center text-[9px]">
+                            <span className="text-slate-500 font-medium">{lang === 'id' ? 'Layanan & Margin' : 'Platform / Margin'} ({settings.markupPercentage}%)</span>
+                            <span className="font-bold text-slate-900">{formatCurrency(parts.markup, currency, settings.exchangeRate)}</span>
                           </div>
                         )}
                         {parts.domesticDiscount > 0 && (
-                          <div className="flex justify-between items-center text-[10px] text-emerald-600">
-                            <span className="font-medium">Domestic Discount ({settings.domesticDiscountPercentage}%)</span>
-                            <span className="font-bold">-{formatCurrency(parts.domesticDiscount, currency)}</span>
+                          <div className="flex justify-between items-center text-[9px] text-emerald-600">
+                            <span className="font-medium">{lang === 'id' ? 'Diskon Domestik' : 'Domestic Discount'} ({settings.domesticDiscountPercentage}%)</span>
+                            <span className="font-bold">-{formatCurrency(parts.domesticDiscount, currency, settings.exchangeRate)}</span>
                           </div>
                         )}
                      </div>
                      
-                     <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                       <div className="space-y-0.5">
-                         <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">PRICE PER PAX</div>
-                         <div className="text-xs font-bold text-slate-500 uppercase">{lang === 'id' ? 'Tamu' : 'Per Person'}</div>
+                     <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                       <div className="space-y-0">
+                         <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                           {lang === 'id' ? 'HARGA PER TAMU' : 'PRICE PER PAX'}
+                         </div>
+                         <div className="text-[8px] font-bold text-slate-500 uppercase">{lang === 'id' ? 'Per Orang' : 'Per Person'}</div>
                        </div>
                        <div className="text-right">
-                         <div className="text-xl font-black text-slate-900">
-                           {formatCurrency(parts.total / quotation.pax, currency)}
+                         <div className="text-sm font-black text-slate-900">
+                           {formatCurrency(parts.total / quotation.pax, currency, settings.exchangeRate)}
                          </div>
                        </div>
                     </div>
                     
-                    <div className="flex justify-between items-center pt-1">
-                       <div className="space-y-0.5">
-                         <div className="text-[10px] font-black text-[#E87230] uppercase tracking-widest">GRAND TOTAL</div>
-                         <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ALL INCLUSIVE</div>
+                    <div className="flex justify-between items-center pt-0.5">
+                       <div className="space-y-0">
+                         <div className="text-[9px] font-black text-[#E87230] uppercase tracking-widest">
+                           {lang === 'id' ? 'TOTAL AKHIR' : 'GRAND TOTAL'}
+                         </div>
+                         <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                           {lang === 'id' ? 'SUDAH TERMASUK SEMUANYA' : 'ALL INCLUSIVE'}
+                         </div>
                        </div>
                        <div className="text-right">
-                         <div className="text-3xl font-black text-[#E87230] tabular-nums tracking-tighter">
-                            {formatCurrency(parts.total, currency)}
+                         <div className="text-xl font-black text-[#E87230] tabular-nums tracking-tighter">
+                            {formatCurrency(parts.total, currency, settings.exchangeRate)}
                          </div>
                        </div>
                     </div>
                     
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <p className="text-[8px] text-slate-500 leading-tight font-bold italic text-center">
-                         *Estimated total cost for {quotation.pax} pax. Prices are subject to change based on actual availability and season.
+                    <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                      <p className="text-[7px] text-slate-500 leading-tight font-bold italic text-center">
+                         *{lang === 'id' 
+                           ? 'Estimasi total biaya. Harga dapat berubah sewaktu-waktu berdasarkan ketersediaan sebenarnya.' 
+                           : 'Estimated total cost. Prices subject to change based on actual availability.'}
                       </p>
                     </div>
                   </div>
                </div>
+            </div>
 
                {/* Signatures */}
                <div className="grid grid-cols-2 gap-3 pt-1">
                   <div className="space-y-6">
-                     <div className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">PREPARED BY</div>
+                     <div className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">
+                       {lang === 'id' ? 'DIBUAT OLEH' : 'PREPARED BY'}
+                     </div>
                      <div className="text-center space-y-1">
                         <div className="h-px bg-slate-200 w-full mb-1" />
                         <div className="text-[8px] font-black text-slate-900 uppercase leading-none text-center">Freesiatour</div>
                      </div>
                   </div>
                   <div className="space-y-6">
-                     <div className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">APPROVED BY</div>
+                     <div className="text-[7px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">
+                       {lang === 'id' ? 'DISETUJUI OLEH' : 'APPROVED BY'}
+                     </div>
                      <div className="text-center space-y-1">
                         <div className="h-px bg-slate-200 w-full mb-1" />
-                        <div className="text-[8px] font-black text-slate-900 uppercase leading-none text-center">{quotation.guestName || 'GUEST NAME'}</div>
+                        <div className="text-[8px] font-black text-slate-900 uppercase leading-none text-center">
+                          {quotation.guestName || (lang === 'id' ? 'NAMA TAMU' : 'GUEST NAME')}
+                        </div>
                      </div>
                   </div>
                </div>
             </div>
           </div>
-
+          
           <div className="text-center pt-4 border-t border-slate-50">
              <p className="text-[9px] font-black text-slate-400 italic tracking-wide">
-               "Thank you for choosing Freesiatour. We look forward to welcoming you to the Island of Gods."
+               {lang === 'id' 
+                 ? '"Terima kasih telah memilih Freesiatour. Kami menantikan kehadiran Anda di Pulau Dewata."' 
+                 : '"Thank you for choosing Freesiatour. We look forward to welcoming you to the Island of Gods."'}
              </p>
           </div>
         </div>
       </div>
 
-      {/* Floating Bottom Bar */}
       <div className="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-5 px-8 py-5 bg-white/80 backdrop-blur-2xl dark:bg-slate-900/80 border border-white dark:border-slate-800 shadow-[0_20px_60px_rgba(0,0,0,0.2)] rounded-[2.5rem] z-50 animate-in fade-in slide-in-from-bottom-4 duration-700 no-print">
          <button 
            onClick={handleDownloadPDF}
@@ -1520,12 +1641,12 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
            {isExporting ? (
              <>
                <RotateCcw className="animate-spin" size={20} />
-               GENERATING...
+               {lang === 'id' ? 'MEMPROSES...' : 'GENERATING...'}
              </>
            ) : (
              <>
                <Download size={22} strokeWidth={2.5} />
-               DOWNLOAD PDF
+               {lang === 'id' ? 'SIMPAN PDF' : 'DOWNLOAD PDF'}
              </>
            )}
          </button>
@@ -1549,6 +1670,7 @@ export const QuotationSummary: React.FC<{ onReset: () => void, lang: 'en' | 'id'
          </button>
       </div>
     </div>
-  );
+  </>
+);
 };
 
