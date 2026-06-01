@@ -2531,6 +2531,26 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let unsubscribe: any = null;
+    const checkUser = async () => {
+      const { auth } = await import('./firebase');
+      setCurrentUser(auth.currentUser);
+      unsubscribe = auth.onAuthStateChanged((user) => {
+        setCurrentUser(user);
+        if (user && user.email) {
+          setFormData((prev) => ({ ...prev, email: user.email || '' }));
+        }
+      });
+    };
+    checkUser();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const scriptUrl = 'https://app.sandbox.midtrans.com/snap/snap.js';
@@ -2545,18 +2565,36 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
     
     try {
+      const { db, auth } = await import('./firebase');
+      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      const { signInAnonymously } = await import('firebase/auth');
+
+      // Email Format Check and Validation
+      const user = auth.currentUser;
+      const isGuest = !user || user.isAnonymous || !user.email;
+      const activeEmail = isGuest ? formData.email : user.email;
+
+      if (!activeEmail || activeEmail.trim() === '') {
+        setEmailError(lang === 'id' ? 'Email wajib diisi untuk melanjutkan pembayaran' : 'Email is required to proceed with payment');
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(activeEmail.trim())) {
+        setEmailError(lang === 'id' ? 'Format email tidak valid (contoh: nama@email.com)' : 'Invalid email format (e.g. name@email.com)');
+        return;
+      }
+
+      setEmailError(null);
+      setIsSubmitting(true);
+      
       const orderId = 'FREESIA-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
       const totalUsd = Math.round(isRideBooking ? tour.price : tour.price * (parseInt(formData.travelers as any) || 0));
       const totalIdr = totalUsd * USD_TO_IDR;
       
-      const { db, auth } = await import('./firebase');
-      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
-      const { signInAnonymously } = await import('firebase/auth');
-      
-      let userId = auth.currentUser?.uid;
+      let userId = user?.uid;
       if (!userId) {
         const userCredential = await signInAnonymously(auth);
         userId = userCredential.user.uid;
@@ -2569,7 +2607,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
         tourTitle: tour.title,
         customerName: formData.name,
         customerPhone: formData.phone,
-        customerEmail: formData.email,
+        customerEmail: activeEmail.trim(),
         date: formData.date,
         travelers: parseInt(formData.travelers as any) || 0,
         pickupAddress: formData.pickupAddress,
@@ -2589,7 +2627,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
           orderId,
           amount: totalIdr,
           customerName: formData.name,
-          customerEmail: formData.email,
+          customerEmail: activeEmail.trim(),
           customerPhone: formData.phone,
           itemDetails: [{
              id: tour.id,
@@ -2739,14 +2777,37 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-500">Email Address (Optional)</label>
-            <input 
-              type="email" 
-              placeholder="e.g. guest@freesiatour.com"
-              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all"
-              value={formData.email}
-              onChange={(e) => setFormData({...formData, email: e.target.value})}
-            />
+            {(!currentUser || currentUser.isAnonymous || !currentUser.email) ? (
+              <>
+                <label className="text-xs font-semibold text-slate-500 flex items-center justify-between">
+                  <span>{lang === 'id' ? 'Alamat Email' : 'Email Address'} <span className="text-red-500">*</span></span>
+                  <span className="text-[10px] text-[#E87230] font-normal">({lang === 'id' ? 'Untuk tiket & info pembayaran' : 'Required for receipt & billing'})</span>
+                </label>
+                <input 
+                  required
+                  type="email" 
+                  placeholder={lang === 'id' ? 'nama@email.com' : 'e.g. guest@freesiatour.com'}
+                  className={`w-full bg-slate-50 dark:bg-slate-800/50 border ${emailError ? 'border-red-500 focus:ring-red-500/20' : 'border-slate-200 dark:border-slate-700 focus:ring-[#E87230]/20 focus:border-[#E87230]'} rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:ring-2 outline-none transition-all`}
+                  value={formData.email}
+                  onChange={(e) => {
+                    setFormData({...formData, email: e.target.value});
+                    if (emailError) setEmailError(null);
+                  }}
+                />
+                {emailError && (
+                  <p className="text-xs text-red-500 font-medium flex items-center space-x-1 mt-1 transition-all">
+                    <span>⚠️ {emailError}</span>
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <label className="text-xs font-semibold text-slate-500">{lang === 'id' ? 'Alamat Email (Akun Aktif)' : 'Email Address (Active Account)'}</label>
+                <div className="w-full bg-slate-50 dark:bg-slate-800/10 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-500 dark:text-slate-400 font-medium font-mono select-none">
+                  {currentUser.email}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-1.5">

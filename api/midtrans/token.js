@@ -61,9 +61,9 @@ export default async function handler(req, res) {
     let validatedEmail = 'guest@freesiatour.com';
     let rawEmailInput = '';
 
-    if (customerEmail) {
+    if (customerEmail && customerEmail.trim() !== '') {
       rawEmailInput = customerEmail;
-    } else if (customerDetails && customerDetails.email) {
+    } else if (customerDetails && customerDetails.email && customerDetails.email.trim() !== '') {
       rawEmailInput = customerDetails.email;
     }
 
