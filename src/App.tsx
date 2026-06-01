@@ -44,7 +44,8 @@ import {
   Map as MapIcon,
   X,
   Navigation,
-  ShieldCheck
+  ShieldCheck,
+  Share2
 } from 'lucide-react';
 import { DESTINATIONS, Tour } from './constants';
 import { APIProvider, Map, useMap, useMapsLibrary, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
@@ -52,11 +53,9 @@ import BaliQuoteApp from './components/calculator/App';
 import { fetchTours, fetchActivities, Activity, fetchSettings } from './services/firebaseService';
 import { ACTIVITIES, VEHICLES_DATA } from './calculatorData';
 import AdminDashboard from './components/AdminDashboard';
+import { loginWithEmail, registerWithEmail, loginWithGoogle, logoutUser } from './firebaseAuth';
 
-const MAP_API_KEY =
-  process.env.GOOGLE_MAPS_PLATFORM_KEY ||
-  (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY ||
-  '';
+const MAP_API_KEY = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || '';
 const hasValidMapKey = Boolean(MAP_API_KEY) && MAP_API_KEY !== 'YOUR_API_KEY';
 
 let USD_TO_IDR = 16000;
@@ -72,7 +71,7 @@ function PriceDisplay({ priceUsd, priceIdr, currency }: { priceUsd?: number; pri
   return <span>${Math.round(finalUsd).toLocaleString('en-US')}</span>;
 }
 
-type Screen = 'splash' | 'home' | 'details' | 'booking' | 'about' | 'map' | 'faq' | 'terms' | 'privacy' | 'qr' | 'history' | 'profile' | 'category' | 'calculator' | 'admin';
+type Screen = 'splash' | 'home' | 'details' | 'booking' | 'about' | 'map' | 'faq' | 'terms' | 'privacy' | 'qr' | 'history' | 'profile' | 'category' | 'calculator' | 'admin' | 'favorites' | 'notifications' | 'saved_locations' | 'account_settings';
 type SearchTab = 'shuttle' | 'tours' | 'activity';
 
 function TourCard({ tour, onClick, lang, currency }: { tour: Tour; onClick: (t: Tour) => void; lang: 'en' | 'id'; currency: Currency; key?: React.Key }) {
@@ -194,8 +193,10 @@ const calculateShuttlePrice = (distanceStr: string, durationStr: string, multipl
 };
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('home');
+  const [screen, setScreen] = useState<Screen>('splash');
   const [isLoading, setIsLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showSidebar, setShowSidebar] = useState(false);
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -213,6 +214,25 @@ export default function App() {
   const [lang, setLang] = useState<'en' | 'id'>('en');
   const [currency, setCurrency] = useState<'USD' | 'IDR'>('USD');
   const [exchangeRate, setExchangeRate] = useState(16000);
+
+  useEffect(() => {
+    let unsubscribe: any = null;
+    const initializeGlobalAuth = async () => {
+      const { auth } = await import('./firebase');
+      unsubscribe = auth.onAuthStateChanged((user) => {
+        setCurrentUser(user);
+        setIsAuthLoading(false);
+        if (user && !user.isAnonymous) {
+          // If logged in via a credential, skip splash and go directly to home
+          setScreen((prev) => prev === 'splash' ? 'home' : prev);
+        }
+      });
+    };
+    initializeGlobalAuth();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -407,7 +427,7 @@ export default function App() {
           </div>
         )}
         <AnimatePresence mode="wait">
-        {isLoading && (
+        {(isLoading || isAuthLoading) && (
           <motion.div 
             key="loading-overlay"
             initial={{ opacity: 0 }}
@@ -420,7 +440,7 @@ export default function App() {
         )}
 
         {screen === 'splash' && (
-          <SplashScreen onContinue={handleContinue} />
+          <SplashScreen onContinue={handleContinue} lang={lang} />
         )}
 
         {screen === 'home' && (
@@ -478,6 +498,7 @@ export default function App() {
             onBack={() => setScreen('home')} 
             onBook={() => setScreen('booking')}
             currency={currency}
+            lang={lang}
           />
         )}
 
@@ -525,17 +546,37 @@ export default function App() {
         )}
 
         {screen === 'history' && (
-          <HistoryScreen onBack={() => setScreen('home')} currency={currency} />
+          <HistoryScreen onBack={() => setScreen('home')} currency={currency} onNavigateToSplash={() => setScreen('splash')} />
         )}
 
         {screen === 'profile' && (
-          <ProfileScreen onBack={() => setScreen('home')} />
+          <ProfileScreen onBack={() => setScreen('home')} onNavigateToSplash={() => setScreen('splash')} onNavigateToScreen={(s) => setScreen(s)} />
+        )}
+
+        {screen === 'favorites' && (
+          <FavoritesScreen 
+            onBack={() => setScreen('profile')} 
+            onViewDetails={handleTourClick}
+          />
+        )}
+
+        {screen === 'notifications' && (
+          <NotificationsScreen onBack={() => setScreen('profile')} />
+        )}
+
+        {screen === 'saved_locations' && (
+          <SavedLocationsScreen onBack={() => setScreen('profile')} />
+        )}
+
+        {screen === 'account_settings' && (
+          <AccountSettingsScreen onBack={() => setScreen('profile')} />
         )}
 
         {screen === 'map' && (
           <MapScreen 
             onTourClick={handleTourClick}
             currency={currency}
+            onBack={() => setScreen('home')}
           />
         )}
 
@@ -675,90 +716,345 @@ function LoadingSpinner({ size = 24, className = "" }: { size?: number; classNam
   );
 }
 
-function SplashScreen({ onContinue }: { onContinue: () => void }) {
+function SplashScreen({ onContinue, lang }: { onContinue: () => void; lang: 'en' | 'id' }) {
+  const [authMode, setAuthMode] = useState<'options' | 'login' | 'register'>('options');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+    try {
+      await loginWithEmail(email, password);
+      onContinue();
+    } catch (err: any) {
+      console.error(err);
+      setError(
+        lang === 'id' 
+          ? 'Gagal masuk. Periksa kembali email dan kata sandi Anda.' 
+          : 'Failed to log in. Please check your email and password.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (password !== confirmPassword) {
+      setError(
+        lang === 'id' 
+          ? 'Kata sandi tidak cocok.' 
+          : 'Passwords do not match.'
+      );
+      return;
+    }
+    if (password.length < 6) {
+      setError(
+        lang === 'id' 
+          ? 'Kata sandi minimal 6 karakter.' 
+          : 'Password should be at least 6 characters.'
+      );
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await registerWithEmail(email, password, displayName);
+      onContinue();
+    } catch (err: any) {
+      console.error(err);
+      setError(
+        lang === 'id' 
+          ? 'Pendaftaran gagal. Alamat email mungkin sudah terdaftar.' 
+          : 'Registration failed. The email address might already be registered.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      await loginWithGoogle();
+      onContinue();
+    } catch (err: any) {
+      console.error(err);
+      setError(
+        lang === 'id'
+          ? 'Masuk dengan Google dibatalkan atau gagal.'
+          : 'Google Sign-In cancelled or failed.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex-1 flex flex-col p-8 bg-white dark:bg-slate-900"
+      className="flex-1 flex flex-col p-6 bg-white dark:bg-slate-900 justify-between min-h-screen overflow-y-auto"
     >
-      <div className="flex justify-end">
-        <button onClick={onContinue} className="text-slate-400 dark:text-slate-500 font-medium">Skip</button>
-      </div>
+      {authMode === 'options' ? (
+        <>
+          <div className="flex justify-end">
+            <button onClick={onContinue} className="text-slate-400 dark:text-slate-500 font-medium">Skip</button>
+          </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-        <div className="relative w-48 h-48 mb-8">
-          <motion.div 
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="absolute inset-0 bg-ungu-muda rounded-full"
-          />
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="relative z-10 flex flex-col items-center"
-          >
-             <div className="w-32 h-32 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-xl mb-4 overflow-hidden">
+          <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 my-8">
+            <div className="relative w-40 h-40 mb-4">
+              <motion.div 
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="absolute inset-0 bg-ungu-muda rounded-full"
+              />
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="relative z-10 flex flex-col items-center"
+              >
+                 <div className="w-28 h-28 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-xl mb-4 overflow-hidden">
+                    <img 
+                      src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771789006/freesiatour_logo.png" 
+                      alt="Freesiatour Logo" 
+                      className="w-full h-full object-contain p-0 scale-[1.35]"
+                      referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                 </div>
+              </motion.div>
+            </div>
+
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.6 }}
+            >
+              <div className="flex items-center justify-center gap-0 mb-2">
                 <img 
                   src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771789006/freesiatour_logo.png" 
-                  alt="Freesiatour Logo" 
-                  className="w-full h-full object-contain p-0 scale-[1.35]"
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                  decoding="async"
+                  alt="" 
+                  className="w-9 h-9 object-contain scale-[1.35]"
                 />
-             </div>
-          </motion.div>
-        </div>
-
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.6 }}
-        >
-          <div className="flex items-center justify-center gap-0 mb-2">
-            <img 
-              src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771789006/freesiatour_logo.png" 
-              alt="" 
-              className="w-10 h-10 object-contain scale-[1.35]"
-            />
-            <div className="flex flex-col items-center justify-center">
-              <span className="font-display font-black text-[#E87230] dark:text-white w-full text-center px-2 uppercase leading-none tracking-tight text-3xl">
-                FREESIATOUR
-              </span>
-              <span className="font-display font-bold text-white uppercase text-[12.5px] tracking-[0.16em] w-full text-center px-2 py-[3px]">
-                HOLIDAY IS FRIENDLY
-              </span>
-            </div>
+                <div className="flex flex-col items-center justify-center">
+                  <span className="font-display font-black text-[#E87230]" dark:text-white w-full text-center px-2 uppercase leading-none tracking-tight text-2xl animate-pulse>
+                    FREESIATOUR
+                  </span>
+                  <span className="font-display font-bold text-white uppercase text-[10px] tracking-[0.16em] w-full text-center px-1.5 py-[2px]">
+                    HOLIDAY IS FRIENDLY
+                  </span>
+                </div>
+              </div>
+              <p className="text-hitam-pekat dark:text-slate-300 mt-4 text-xs font-medium max-w-xs mx-auto">
+                Discover hidden gems and track every step of your journey with ease across Indonesia.
+              </p>
+            </motion.div>
           </div>
-          <p className="text-hitam-pekat dark:text-slate-300 mt-4 text-body-2">
-            Discover hidden gems and track every step of your journey with ease across Indonesia.
-          </p>
-        </motion.div>
-      </div>
 
-      <motion.div 
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.8 }}
-        className="space-y-4"
-      >
-        <button 
-          onClick={onContinue}
-          className="btn-primary w-full"
-        >
-          Login
-        </button>
-        <button 
-          onClick={onContinue}
-          className="btn-secondary w-full"
-        >
-          Sign up
-        </button>
-      </motion.div>
+          <motion.div 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.8 }}
+            className="space-y-4 max-w-sm mx-auto w-full mb-4"
+          >
+            <button 
+              onClick={() => setAuthMode('login')}
+              className="btn-primary w-full py-3.5 rounded-2xl font-bold bg-[#E87230] text-white flex items-center justify-center hover:bg-[#d66120] transition-all"
+            >
+              {lang === 'id' ? 'Masuk' : 'Login'}
+            </button>
+            <button 
+              onClick={() => setAuthMode('register')}
+              className="btn-secondary w-full py-3.5 rounded-2xl font-bold border-2 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+            >
+              {lang === 'id' ? 'Daftar' : 'Sign up'}
+            </button>
+            <button 
+              onClick={onContinue}
+              className="w-full text-slate-500 dark:text-slate-400 font-bold py-2 text-xs hover:underline transition-all block text-center"
+            >
+              {lang === 'id' ? 'Lanjutkan sebagai Tamu' : 'Continue as Guest'}
+            </button>
+          </motion.div>
+        </>
+      ) : authMode === 'login' ? (
+        <div className="flex-1 flex flex-col justify-center max-w-sm mx-auto w-full space-y-6 my-10">
+          <div className="flex items-center space-x-1">
+            <button onClick={() => { setAuthMode('options'); setError(null); }} className="text-slate-400 dark:text-slate-500 p-1 -ml-2 rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+              <ChevronLeft size={24} />
+            </button>
+            <h3 className="text-xl font-bold text-hitam-pekat dark:text-white">
+              {lang === 'id' ? 'Masuk ke Akun Anda' : 'Login to Your Account'}
+            </h3>
+          </div>
+
+          <form onSubmit={handleEmailLogin} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500">Email</label>
+              <input 
+                type="email" 
+                required
+                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all"
+                placeholder="e.g. name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-500">
+                  {lang === 'id' ? 'Kata Sandi' : 'Password'}
+                </label>
+              </div>
+              <input 
+                type="password" 
+                required
+                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-500 font-semibold p-1 bg-red-500/10 rounded-lg">{error}</p>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              className="w-full py-3.5 bg-[#E87230] hover:bg-[#d66120] text-white rounded-2xl font-bold text-sm tracking-wide shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-2"
+            >
+              {isLoading && <Loader2 size={18} className="animate-spin text-white" />}
+              <span>{lang === 'id' ? 'Masuk' : 'Login'}</span>
+            </button>
+          </form>
+
+          <div className="relative flex items-center justify-center border-b border-slate-100 dark:border-slate-800 h-2">
+            <span className="relative top-1 bg-white dark:bg-slate-900 px-3 text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+              {lang === 'id' ? 'atau' : 'or'}
+            </span>
+          </div>
+
+          <button 
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isLoading}
+            className="w-full py-3 px-4 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-center space-x-2 bg-white dark:bg-slate-900 shadow-sm"
+          >
+            <svg className="w-5 h-5 mr-1" viewBox="0 0 24 24" width="24" height="24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span>{lang === 'id' ? 'Lanjutkan dengan Google' : 'Continue with Google'}</span>
+          </button>
+
+          <p className="text-xs text-center text-slate-500">
+            {lang === 'id' ? 'Belum punya akun? ' : "Don't have an account? "}
+            <button type="button" onClick={() => { setAuthMode('register'); setError(null); }} className="text-[#E87230] font-bold hover:underline">
+              {lang === 'id' ? 'Daftar' : 'Sign up'}
+            </button>
+          </p>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col justify-center max-w-sm mx-auto w-full space-y-6 my-10">
+          <div className="flex items-center space-x-1">
+            <button onClick={() => { setAuthMode('options'); setError(null); }} className="text-slate-400 dark:text-slate-500 p-1 -ml-2 rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+              <ChevronLeft size={24} />
+            </button>
+            <h3 className="text-xl font-bold text-hitam-pekat dark:text-white">
+              {lang === 'id' ? 'Buat Akun Baru' : 'Create New Account'}
+            </h3>
+          </div>
+
+          <form onSubmit={handleEmailRegister} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500">
+                {lang === 'id' ? 'Nama Lengkap' : 'Full Name'}
+              </label>
+              <input 
+                type="text" 
+                required
+                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all"
+                placeholder="e.g. John Doe"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500">Email</label>
+              <input 
+                type="email" 
+                required
+                className="w-full bg-slate-50 dark:bg-[#121b2d] border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all z-[1]"
+                placeholder="e.g. name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500">
+                {lang === 'id' ? 'Kata Sandi' : 'Password'}
+              </label>
+              <input 
+                type="password" 
+                required
+                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all"
+                placeholder="•••••••• (Min 6 characters)"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500">
+                {lang === 'id' ? 'Konfirmasi Kata Sandi' : 'Confirm Password'}
+              </label>
+              <input 
+                type="password" 
+                required
+                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all"
+                placeholder="••••••••"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-500 font-semibold p-1 bg-red-500/10 rounded-lg">{error}</p>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              className="w-full py-3.5 bg-[#E87230] hover:bg-[#d66120] text-white rounded-2xl font-bold text-sm tracking-wide shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-2"
+            >
+              {isLoading && <Loader2 size={18} className="animate-spin text-white" />}
+              <span>{lang === 'id' ? 'Daftar' : 'Sign up'}</span>
+            </button>
+          </form>
+
+          <p className="text-xs text-center text-slate-500">
+            {lang === 'id' ? 'Sudah punya akun? ' : 'Already have an account? '}
+            <button type="button" onClick={() => { setAuthMode('login'); setError(null); }} className="text-[#E87230] font-bold hover:underline">
+              {lang === 'id' ? 'Masuk' : 'Login'}
+            </button>
+          </p>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -804,6 +1100,7 @@ function RouteDisplay({ pickup, destination, onRouteData }: { pickup: string, de
   const map = useMap();
   const routesLib = useMapsLibrary('routes');
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
+  const [routePoints, setRoutePoints] = useState<{start: google.maps.LatLngLiteral | null, end: google.maps.LatLngLiteral | null}>({start: null, end: null});
 
   useEffect(() => {
     if (!routesLib?.Route || !map || !pickup || !destination || pickup === 'Bali' || destination === 'Denpasar') return;
@@ -836,6 +1133,20 @@ function RouteDisplay({ pickup, destination, onRouteData }: { pickup: string, de
           map.fitBounds(route.viewport);
         }
 
+        // Get coordinates from the first polyline's path
+        if (newPolylines.length > 0 && newPolylines[0].getPath().getLength() > 0) {
+           const path = newPolylines[0].getPath();
+           const startPt = path.getAt(0);
+           const endPolyline = newPolylines[newPolylines.length - 1];
+           const endPath = endPolyline.getPath();
+           const endPt = endPath.getAt(endPath.getLength() - 1);
+           
+           setRoutePoints({
+             start: { lat: startPt.lat(), lng: startPt.lng() },
+             end: { lat: endPt.lat(), lng: endPt.lng() }
+           });
+        }
+
         if (onRouteData) {
           const distanceKm = (route.distanceMeters || 0) / 1000;
           const durationMin = Math.round((route.durationMillis || 0) / 60000);
@@ -854,7 +1165,22 @@ function RouteDisplay({ pickup, destination, onRouteData }: { pickup: string, de
     };
   }, [routesLib, map, pickup, destination, onRouteData]);
 
-  return null;
+  if (!routePoints.start && !routePoints.end) return null;
+
+  return (
+    <>
+      {routePoints.start && (
+        <AdvancedMarker position={routePoints.start} zIndex={100}>
+          <Pin background="#E87230" borderColor="#FFFFFF" glyphColor="#FFFFFF" />
+        </AdvancedMarker>
+      )}
+      {routePoints.end && (
+        <AdvancedMarker position={routePoints.end} zIndex={100}>
+          <Pin background="#4CAF50" borderColor="#FFFFFF" glyphColor="#FFFFFF" />
+        </AdvancedMarker>
+      )}
+    </>
+  );
 }
 
 function ShuttleMap({ pickup, destination, lang, onRouteData }: { pickup: string, destination: string, lang: 'en' | 'id', onRouteData?: (data: { distance: string, duration: string }) => void }) {
@@ -869,6 +1195,7 @@ function ShuttleMap({ pickup, destination, lang, onRouteData }: { pickup: string
         defaultCenter={center}
         defaultZoom={11}
         disableDefaultUI={true}
+        mapId="DEMO_MAP_ID"
         internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
         styles={[
           {
@@ -1676,7 +2003,8 @@ function HomeScreen({
                             included: [],
                             excluded: [],
                             lat: -8.4095,
-                            lng: 115.1889
+                            lng: 115.1889,
+                            isActivity: true
                           };
                           onActivityBook(tour);
                         }} 
@@ -2289,14 +2617,56 @@ function CategoryScreen({
 
 // removed
 
-function DetailsScreen({ tour, onBack, onBook, currency }: { tour: Tour; onBack: () => void; onBook: () => void; currency: Currency }) {
+function DetailsScreen({ tour, onBack, onBook, currency, lang }: { tour: Tour; onBack: () => void; onBook: () => void; currency: Currency; lang: 'en' | 'id' }) {
+  const [isFavorite, setIsFavorite] = useState(false);
+
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     const container = document.querySelector('.overflow-y-auto');
     if (container) {
       container.scrollTo({ top: 0, behavior: 'instant' });
     }
-  }, []);
+    
+    try {
+      const stored = localStorage.getItem('freesia_favorites');
+      if (stored) {
+        const favorites = JSON.parse(stored);
+        if (favorites.some((f: any) => f.id === tour.id)) {
+          setIsFavorite(true);
+        }
+      }
+    } catch(e) {}
+  }, [tour.id]);
+
+  const toggleFavorite = () => {
+    try {
+      const stored = localStorage.getItem('freesia_favorites') || '[]';
+      let favorites = JSON.parse(stored);
+      if (isFavorite) {
+        favorites = favorites.filter((f: any) => f.id !== tour.id);
+      } else {
+        favorites.push(tour);
+      }
+      localStorage.setItem('freesia_favorites', JSON.stringify(favorites));
+      setIsFavorite(!isFavorite);
+    } catch(e) {}
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: tour.title,
+          text: `Check out this tour: ${tour.title} at ${tour.location}`,
+          url: window.location.href,
+        });
+      } catch (err) {
+        console.error('Error sharing:', err);
+      }
+    } else {
+      alert(`Share functionality not supported. Here is the link: ${window.location.href}`);
+    }
+  };
 
   return (
     <motion.div 
@@ -2328,11 +2698,21 @@ function DetailsScreen({ tour, onBack, onBook, currency }: { tour: Tour; onBack:
             <ChevronLeft size={24} />
           </button>
           <div className="flex space-x-2">
-            <button className="w-10 h-10 bg-white/20 dark:bg-slate-800/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30">
-              <Heart size={20} />
+            <button 
+              onClick={toggleFavorite}
+              className={`w-10 h-10 backdrop-blur-md rounded-full flex items-center justify-center border transition-all ${
+                isFavorite 
+                  ? 'bg-rose-500 text-white border-rose-500' 
+                  : 'bg-white/20 dark:bg-slate-800/20 text-white border-white/30 hover:bg-white/30'
+              }`}
+            >
+              <Heart size={20} className={isFavorite ? 'fill-current' : ''} />
             </button>
-            <button className="w-10 h-10 bg-white/20 dark:bg-slate-800/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30">
-              <Info size={20} />
+            <button 
+              onClick={handleShare}
+              className="w-10 h-10 bg-white/20 dark:bg-slate-800/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/30 hover:bg-white/30 transition-all"
+            >
+              <Share2 size={20} />
             </button>
           </div>
         </div>
@@ -2344,7 +2724,9 @@ function DetailsScreen({ tour, onBack, onBook, currency }: { tour: Tour; onBack:
           <h2 className="text-hitam-pekat dark:text-white">{tour.title}</h2>
           <div className="flex items-center text-hitam-pekat dark:text-slate-300 mt-2">
             <Calendar size={16} className="mr-2 text-pink-pekat" />
-            <span className="text-sm font-medium">Available: 23 - 30 May 2026</span>
+            <span className="text-sm font-medium">
+              {lang === 'en' ? 'Available Daily' : 'Tersedia Setiap Hari'}
+            </span>
           </div>
         </div>
       </div>
@@ -2392,9 +2774,37 @@ function DetailsScreen({ tour, onBack, onBook, currency }: { tour: Tour; onBack:
 
         <div>
           <h3 className="mb-4 dark:text-white">Description</h3>
-          <p className="text-hitam-pekat dark:text-slate-300 text-body-2 leading-relaxed">
-            {tour.description}
-          </p>
+          <div className="text-hitam-pekat dark:text-slate-300 text-body-2 leading-relaxed space-y-4">
+            <p>{tour.description}</p>
+            
+            {!tour.isActivity && !tour.id.startsWith('shuttle-') && (
+              <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                <h4 className="font-bold text-sm mb-2 text-pink-pekat">Tour Price Information</h4>
+                <p className="font-bold mb-1">Fullday tour</p>
+                <ul className="list-disc list-inside mb-4 space-y-1">
+                  <li>For 2-4 Person</li>
+                  <li>5-8 Hours</li>
+                </ul>
+                
+                <p className="font-bold mb-1">Additional:</p>
+                <ul className="list-none mb-4 space-y-1">
+                  <li>• IDR 60K Hour</li>
+                  <li>• IDR 30K Person</li>
+                  <li>• IDR 150K Long Trip</li>
+                </ul>
+                
+                <p className="font-bold mb-1">Maximum:</p>
+                <ul className="list-disc list-inside mb-4 space-y-1">
+                  <li>2 Additional Hours</li>
+                  <li>Up to 7 Person</li>
+                </ul>
+                
+                <p className="text-xs italic text-abu-abu dark:text-slate-400">
+                  * Price may vary during low mid and high season
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div>
@@ -2510,6 +2920,8 @@ function DetailsScreen({ tour, onBack, onBook, currency }: { tour: Tour; onBack:
 
 function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }: { tour: Tour; onBack: () => void; onSuccess: () => void; onTermsClick: () => void; currency: Currency; lang: 'en' | 'id' }) {
   const isRideBooking = tour.id.startsWith('shuttle-');
+  const [showRouteMap, setShowRouteMap] = useState(false);
+  const [routePreviewData, setRoutePreviewData] = useState<{distance: string, duration: string} | null>(null);
   
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2591,7 +3003,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
       setIsSubmitting(true);
       
       const orderId = 'FREESIA-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-      const totalUsd = Math.round(isRideBooking ? tour.price : tour.price * (parseInt(formData.travelers as any) || 0));
+      const totalUsd = Math.round((tour.isActivity && !isRideBooking) ? tour.price * (parseInt(formData.travelers as any) || 1) : tour.price);
       const totalIdr = totalUsd * USD_TO_IDR;
       
       let userId = user?.uid;
@@ -2625,10 +3037,12 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId,
-          amount: totalIdr,
-          customerName: formData.name,
-          customerEmail: activeEmail.trim(),
-          customerPhone: formData.phone,
+          grossAmount: totalIdr,
+          customerDetails: {
+            first_name: formData.name,
+            email: activeEmail.trim(),
+            phone: formData.phone,
+          },
           itemDetails: [{
              id: tour.id,
              price: totalIdr,
@@ -2681,7 +3095,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
       `- Travelers: ${formData.travelers}\n` +
       `- Pickup: ${formData.pickupAddress}\n` +
       `- Notes: ${formData.note || '-'}\n\n` +
-      `Total: ${currency} ${Math.round(isRideBooking ? tour.price : tour.price * (parseInt(formData.travelers as any) || 0)).toLocaleString()}` +
+      `Total: ${currency} ${Math.round((tour.isActivity && !isRideBooking) ? tour.price * (parseInt(formData.travelers as any) || 1) : tour.price).toLocaleString()}` +
       `\n(Payment status: Paid/Pending via Midtrans)`;
 
     return (
@@ -2736,7 +3150,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
           <ChevronLeft size={24} />
         </button>
         <h3 className="dark:text-white text-xl font-bold">
-          {isRideBooking ? (lang === 'en' ? 'Book Your Ride' : 'Pesan Perjalanan') : (lang === 'en' ? 'Book Your Tour' : 'Pesan Paket Tour')}
+          {isRideBooking ? (lang === 'en' ? 'Book Your Ride' : 'Pesan Perjalanan') : (tour.isActivity ? (lang === 'en' ? 'Book Your Activity' : 'Pesan Aktivitas') : (lang === 'en' ? 'Book Your Tour' : 'Pesan Paket Tour'))}
         </h3>
       </header>
 
@@ -2746,7 +3160,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
           <div>
             <div className="font-bold text-hitam-pekat dark:text-white">{tour.title}</div>
             <div className="text-xs text-pink-pekat font-bold">
-              <PriceDisplay priceUsd={tour.price} currency={currency} /> / {isRideBooking ? (lang === 'en' ? 'vehicle' : 'kendaraan') : (lang === 'en' ? 'person' : 'orang')}
+              <PriceDisplay priceUsd={tour.price} currency={currency} /> / {isRideBooking ? (lang === 'en' ? 'vehicle' : 'kendaraan') : (tour.isActivity ? (lang === 'en' ? 'pax' : 'orang') : (lang === 'en' ? 'tour (full-day)' : 'tur (full-day)'))}
             </div>
           </div>
         </div>
@@ -2811,7 +3225,18 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-500">Pickup Address</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-500">Pickup Address</label>
+              {formData.pickupAddress.trim().length > 3 && (
+                <button
+                  type="button"
+                  onClick={() => setShowRouteMap(!showRouteMap)}
+                  className="text-xs font-bold text-[#E87230] hover:underline"
+                >
+                  {showRouteMap ? (lang === 'en' ? 'Hide Route Map' : 'Tutup Peta Rute') : (lang === 'en' ? 'View Route Map' : 'Lihat Peta Rute')}
+                </button>
+              )}
+            </div>
             <div className="relative">
               <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input 
@@ -2820,9 +3245,37 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
                 placeholder="Enter pickup hotel or address"
                 className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pl-11 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all"
                 value={formData.pickupAddress}
-                onChange={(e) => setFormData({...formData, pickupAddress: e.target.value})}
+                onChange={(e) => {
+                  setFormData({...formData, pickupAddress: e.target.value});
+                  if (showRouteMap && e.target.value.trim().length < 4) {
+                     setShowRouteMap(false);
+                  }
+                }}
               />
             </div>
+            
+            {showRouteMap && formData.pickupAddress.trim().length > 3 && (
+              <div className="pt-2 flex flex-col space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="h-48 w-full rounded-2xl overflow-hidden shadow-sm relative">
+                  <ShuttleMap 
+                    pickup={formData.pickupAddress} 
+                    destination={isRideBooking ? tour.location.split(' to ')[1] || tour.location : tour.title + ', ' + tour.location} 
+                    lang={lang} 
+                    onRouteData={setRoutePreviewData}
+                  />
+                </div>
+                {routePreviewData && (
+                  <div className="flex justify-between bg-[#E87230]/10 border border-[#E87230]/20 rounded-xl p-3">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                      {lang === 'en' ? 'Distance:' : 'Jarak:'} <span className="font-bold text-[#E87230]">{routePreviewData.distance}</span>
+                    </span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                      {lang === 'en' ? 'Est. Time:' : 'Estimasi Waktu:'} <span className="font-bold text-[#E87230]">{routePreviewData.duration}</span>
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -2880,7 +3333,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
                 <span>Processing...</span>
               </>
             ) : (
-              <span>{lang === 'en' ? 'Confirm Booking' : 'Konfirmasi Pesanan'} • <PriceDisplay priceUsd={isRideBooking ? tour.price : tour.price * (parseInt(formData.travelers as any) || 0)} currency={currency} /></span>
+              <span>{lang === 'en' ? 'Confirm Booking' : 'Konfirmasi Pesanan'} • <PriceDisplay priceUsd={(tour.isActivity && !isRideBooking) ? tour.price * (parseInt(formData.travelers as any) || 1) : tour.price} currency={currency} /></span>
             )}
           </button>
           <p className="text-center text-xs text-abu-abu mt-4">
@@ -3285,7 +3738,7 @@ function PrivacyScreen({ onBack, lang }: { onBack: () => void; lang: 'en' | 'id'
   );
 }
 
-function MapScreen({ onTourClick, currency }: { onTourClick: (tour: Tour) => void, currency: Currency }) {
+function MapScreen({ onTourClick, currency, onBack }: { onTourClick: (tour: Tour) => void, currency: Currency, onBack: () => void }) {
   const [activeTour, setActiveTour] = useState<Tour | null>(null);
 
   const center = {
@@ -3338,7 +3791,12 @@ function MapScreen({ onTourClick, currency }: { onTourClick: (tour: Tour) => voi
       className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden"
     >
       <header className="px-6 py-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10">
-        <h3 className="dark:text-white text-xl font-bold">Explore Map</h3>
+        <div className="flex items-center">
+          <button onClick={onBack} className="mr-4 text-hitam-pekat dark:text-white">
+            <ChevronLeft size={24} />
+          </button>
+          <h3 className="dark:text-white text-xl font-bold">Explore Map</h3>
+        </div>
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 rounded-full bg-pink-pekat/10 flex items-center justify-center text-pink-pekat">
             <MapPin size={16} />
@@ -3355,7 +3813,7 @@ function MapScreen({ onTourClick, currency }: { onTourClick: (tour: Tour) => voi
             </div>
             <h4 className="font-bold text-hitam-pekat dark:text-white mb-2">API Key Missing</h4>
             <p className="text-sm text-abu-abu dark:text-slate-400 max-w-xs">
-              Please set your <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">GOOGLE_MAPS_PLATFORM_KEY</code> in the environment variables to enable the map.
+              Please set your <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">VITE_GOOGLE_MAPS_API_KEY</code> in the environment variables to enable the map.
             </p>
           </div>
         ) : (
@@ -3364,8 +3822,10 @@ function MapScreen({ onTourClick, currency }: { onTourClick: (tour: Tour) => voi
             defaultZoom={10}
             disableDefaultUI={true}
             mapId="DEMO_MAP_ID"
+            onClick={() => setActiveTour(null)}
             internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-            styles={mapOptions.styles}
+            className="w-full h-full absolute inset-0"
+            style={{width: '100%', height: '100%'}}
           >
             {DESTINATIONS.map((marker) => (
               <AdvancedMarker
@@ -3486,19 +3946,112 @@ function QrScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-function HistoryScreen({ onBack, currency }: { onBack: () => void, currency: Currency }) {
-  const historyItems = [
-    { id: 1, title: 'Nusa Penida Day Tour', date: '12 Oct 2023', status: 'Completed', price: 45, image: 'https://picsum.photos/seed/nusa/200/200' },
-    { id: 2, title: 'Mount Batur Sunrise', date: '05 Sep 2023', status: 'Completed', price: 35, image: 'https://picsum.photos/seed/batur/200/200' },
-    { id: 3, title: 'Uluwatu Temple Visit', date: '20 Aug 2023', status: 'Cancelled', price: 25, image: 'https://picsum.photos/seed/uluwatu/200/200' },
-  ];
+function HistoryScreen({ onBack, currency, onNavigateToSplash }: { onBack: () => void, currency: Currency, onNavigateToSplash: () => void }) {
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchBookings = async () => {
+      const { auth, db } = await import('./firebase');
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      
+      const currentUser = auth.currentUser;
+      setUser(currentUser);
+      
+      if (!currentUser || currentUser.isAnonymous || !currentUser.email) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const bookingsRef = collection(db, 'bookings');
+        const q = query(bookingsRef, where('userId', '==', currentUser.uid));
+        const querySnapshot = await getDocs(q);
+        const fetchedBookings = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          
+          let displayDate = 'N/A';
+          if (data.pickupDate) {
+            displayDate = data.pickupDate;
+          } else if (data.date) {
+            displayDate = data.date;
+          } else if (data.createdAt) {
+            if (data.createdAt.toDate) {
+              displayDate = data.createdAt.toDate().toLocaleDateString('en-US', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+              });
+            } else if (typeof data.createdAt === 'string') {
+              displayDate = data.createdAt.split('T')[0];
+            } else if (data.createdAt.seconds) {
+              displayDate = new Date(data.createdAt.seconds * 1000).toLocaleDateString('en-US', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+              });
+            }
+          }
+
+          return {
+            id: doc.id,
+            title: data.tourTitle || data.packageName || 'Bali Tour Package',
+            date: displayDate,
+            status: data.paymentStatus || data.status || 'Pending',
+            price: data.total || (data.totalUsd ? data.totalUsd : 0),
+            image: `https://picsum.photos/seed/${doc.id}/200/200`
+          };
+        });
+
+        fetchedBookings.sort((a, b) => b.id.localeCompare(a.id));
+        setBookings(fetchedBookings);
+      } catch (err) {
+        console.error('Error fetching bookings:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, []);
+
+  const getStatusLabelAndStyle = (status: string) => {
+    const normalized = (status || '').toLowerCase();
+    if (normalized === 'completed' || normalized === 'settlement' || normalized === 'capture' || normalized === 'success') {
+      return {
+        label: 'Completed',
+        style: 'bg-emerald-500/10 text-emerald-500'
+      };
+    }
+    if (normalized === 'pending') {
+      return {
+        label: 'Pending',
+        style: 'bg-amber-500/10 text-amber-500'
+      };
+    }
+    return {
+      label: 'Cancelled',
+      style: 'bg-red-500/10 text-red-500'
+    };
+  };
+
+  const isGuest = !user || user.isAnonymous || !user.email;
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 bg-white dark:bg-slate-900 min-h-screen">
+        <Loader2 className="animate-spin text-[#E87230]" size={36} />
+      </div>
+    );
+  }
 
   return (
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden"
+      className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden min-h-screen"
     >
       <header className="px-6 py-4 flex items-center border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10">
         <button onClick={onBack} className="mr-4 text-hitam-pekat dark:text-white">
@@ -3508,52 +4061,126 @@ function HistoryScreen({ onBack, currency }: { onBack: () => void, currency: Cur
       </header>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4 pb-32">
-        {historyItems.map((item) => (
-          <div key={item.id} className="bg-white dark:bg-slate-900 rounded-3xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 flex items-center space-x-4">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0">
-              <img src={item.image} alt={item.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="font-bold text-hitam-pekat dark:text-white truncate text-sm mb-1">{item.title}</h4>
-              <div className="flex items-center text-abu-abu dark:text-slate-400 text-[10px] mb-2">
-                <Calendar size={10} className="mr-1" />
-                {item.date}
-              </div>
-              <div className="flex items-center justify-between">
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  item.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
-                }`}>
-                  {item.status}
-                </span>
-                <span className="text-xs font-bold text-pink-pekat">
-                  <PriceDisplay priceUsd={item.price} currency={currency} />
-                </span>
-              </div>
-            </div>
-            <ChevronRight size={16} className="text-slate-300" />
-          </div>
-        ))}
-
-        {historyItems.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-400 mb-4">
+        {isGuest ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
+            <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-[2rem] flex items-center justify-center text-slate-400">
               <History size={32} />
             </div>
-            <p className="text-abu-abu dark:text-slate-400 font-medium">No history yet</p>
+            <div>
+              <p className="text-hitam-pekat dark:text-white font-bold text-lg">Login to See History</p>
+              <p className="text-abu-abu dark:text-slate-400 font-medium text-sm max-w-xs mt-1">Please log in to view and track your Bali holiday bookings.</p>
+            </div>
+            <button 
+              onClick={onNavigateToSplash}
+              className="px-6 py-3 bg-[#E87230] text-white rounded-2xl font-bold text-sm hover:bg-[#d66120] transition-all"
+            >
+              Log In Now
+            </button>
           </div>
+        ) : (
+          <>
+            {bookings.map((item) => {
+              const statusDetails = getStatusLabelAndStyle(item.status);
+              return (
+                <div key={item.id} className="bg-white dark:bg-slate-900 rounded-3xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 flex items-center space-x-4">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0">
+                    <img src={item.image} alt={item.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-hitam-pekat dark:text-white truncate text-sm mb-1">{item.title}</h4>
+                    <div className="flex items-center text-abu-abu dark:text-slate-400 text-[10px] mb-2">
+                      <Calendar size={10} className="mr-1" />
+                      {item.date}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusDetails.style}`}>
+                        {statusDetails.label}
+                      </span>
+                      <span className="text-xs font-bold text-[#E87230]">
+                        <PriceDisplay priceUsd={item.price} currency={currency} />
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-slate-300" />
+                </div>
+              );
+            })}
+
+            {bookings.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-400 mb-4">
+                  <History size={32} />
+                </div>
+                <p className="text-abu-abu dark:text-slate-400 font-medium font-bold text-sm">No bookings recorded yet</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </motion.div>
   );
 }
 
-function ProfileScreen({ onBack }: { onBack: () => void }) {
+function ProfileScreen({ onBack, onNavigateToSplash, onNavigateToScreen }: { onBack: () => void, onNavigateToSplash: () => void, onNavigateToScreen: (screenId: Screen) => void }) {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [tripsCount, setTripsCount] = useState(0);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const { auth, db } = await import('./firebase');
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      
+      const currentUser = auth.currentUser;
+      setUser(currentUser);
+
+      if (currentUser && !currentUser.isAnonymous && currentUser.email) {
+        try {
+          const bookingsRef = collection(db, 'bookings');
+          const q = query(bookingsRef, where('userId', '==', currentUser.uid));
+          const querySnapshot = await getDocs(q);
+          setTripsCount(querySnapshot.size);
+        } catch (err) {
+          console.error('Error counting user trips:', err);
+        }
+      }
+      setLoading(false);
+    };
+
+    fetchUserData();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+      onBack(); // Go back home
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
+
+  const showComingSoon = (item: string) => {
+    setToastMessage(`${item} feature is coming soon!`);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const isGuest = !user || user.isAnonymous || !user.email;
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 bg-white dark:bg-slate-900 min-h-screen">
+        <Loader2 className="animate-spin text-[#E87230]" size={36} />
+      </div>
+    );
+  }
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden"
+      className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden min-h-screen relative"
     >
       <header className="px-6 py-4 flex items-center border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10">
         <button onClick={onBack} className="mr-4 text-hitam-pekat dark:text-white">
@@ -3562,63 +4189,292 @@ function ProfileScreen({ onBack }: { onBack: () => void }) {
         <h3 className="dark:text-white text-xl font-bold">My Profile</h3>
       </header>
 
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, x: '-50%' }}
+            className="absolute top-20 left-1/2 z-50 bg-[#E87230] text-white px-5 py-2.5 rounded-full shadow-lg text-sm font-bold whitespace-nowrap flex items-center gap-2"
+          >
+            <Clock size={16} />
+            {toastMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex-1 overflow-y-auto pb-32">
-        {/* Profile Header */}
-        <div className="p-8 flex flex-col items-center text-center relative">
-          <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-pink-pekat/10 to-transparent" />
-          
-          <div className="relative mb-4">
-            <div className="w-24 h-24 rounded-[2rem] overflow-hidden border-4 border-white dark:border-slate-900 shadow-xl">
-              <img src="https://picsum.photos/seed/user/200/200" alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        {isGuest ? (
+          <div className="p-8 flex flex-col items-center text-center space-y-6">
+            <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+              <User size={48} />
             </div>
-            <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-pink-pekat rounded-xl flex items-center justify-center text-white shadow-lg border-2 border-white dark:border-slate-900">
-              <Settings size={14} />
+            <div>
+              <h4 className="text-xl font-bold text-hitam-pekat dark:text-white">Guest Traveller</h4>
+              <p className="text-sm text-abu-abu dark:text-slate-400 mt-1 max-w-xs mx-auto">Sign up or log in to manage your bookings and unlock exclusive Bali tour routes.</p>
             </div>
-          </div>
-
-          <h4 className="text-xl font-bold text-hitam-pekat dark:text-white">John Doe</h4>
-          <p className="text-sm text-abu-abu dark:text-slate-400">john.doe@example.com</p>
-
-          <div className="grid grid-cols-3 gap-4 w-full mt-8">
-            <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-              <div className="text-pink-pekat font-bold text-lg">12</div>
-              <div className="text-[10px] text-abu-abu dark:text-slate-500 uppercase font-bold tracking-wider">Trips</div>
-            </div>
-            <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-              <div className="text-ungu-pekat font-bold text-lg">4.8</div>
-              <div className="text-[10px] text-abu-abu dark:text-slate-500 uppercase font-bold tracking-wider">Rating</div>
-            </div>
-            <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-              <div className="text-oren-prosess font-bold text-lg">2.4k</div>
-              <div className="text-[10px] text-abu-abu dark:text-slate-500 uppercase font-bold tracking-wider">Points</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Menu Items */}
-        <div className="px-6 space-y-3">
-          {[
-            { icon: Heart, label: 'My Favorites', color: 'text-pink-pekat', bg: 'bg-pink-pekat/10' },
-            { icon: Bell, label: 'Notifications', color: 'text-ungu-pekat', bg: 'bg-ungu-pekat/10' },
-            { icon: MapPin, label: 'Saved Locations', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-            { icon: Settings, label: 'Account Settings', color: 'text-slate-500', bg: 'bg-slate-500/10' },
-          ].map((item, idx) => (
-            <button key={idx} className="w-full bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group hover:border-pink-pekat/30 transition-colors">
-              <div className="flex items-center space-x-4">
-                <div className={`w-10 h-10 ${item.bg} ${item.color} rounded-xl flex items-center justify-center`}>
-                  <item.icon size={20} />
-                </div>
-                <span className="font-bold text-hitam-pekat dark:text-white text-sm">{item.label}</span>
-              </div>
-              <ChevronRight size={18} className="text-slate-300 group-hover:text-pink-pekat transition-colors" />
+            <button 
+              onClick={onNavigateToSplash}
+              className="px-8 py-3.5 bg-[#E87230] text-white rounded-2xl font-bold text-sm tracking-wide hover:bg-[#d66120] transition-all w-full max-w-xs shadow-lg shadow-[#E87230]/20"
+            >
+              Sign In or Register
             </button>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <>
+            {/* Profile Header */}
+            <div className="p-8 flex flex-col items-center text-center relative">
+              <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#E87230]/10 to-transparent" />
+              
+              <div className="relative mb-4">
+                <div className="w-24 h-24 rounded-[2rem] overflow-hidden border-4 border-white dark:border-slate-900 shadow-xl bg-slate-100 flex items-center justify-center">
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="text-3xl font-black text-[#E87230]">
+                      {(user.displayName || user.email || 'F').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#E87230] rounded-xl flex items-center justify-center text-white shadow-lg border-2 border-white dark:border-slate-900">
+                  <Settings size={14} />
+                </div>
+              </div>
 
-        <div className="px-6 mt-8">
-          <button className="w-full py-4 bg-slate-100 dark:bg-slate-800 rounded-2xl text-sm font-bold text-red-500 hover:bg-red-500 hover:text-white transition-all">
-            Log Out
-          </button>
+              <h4 className="text-xl font-bold text-hitam-pekat dark:text-white">{user.displayName || 'Freesiatour Traveller'}</h4>
+              <p className="text-sm text-abu-abu dark:text-slate-400">{user.email}</p>
+
+              <div className="grid grid-cols-3 gap-4 w-full mt-8">
+                <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                  <div className="text-[#E87230] font-bold text-lg">{tripsCount}</div>
+                  <div className="text-[10px] text-abu-abu dark:text-slate-500 uppercase font-bold tracking-wider">Bookings</div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                  <div className="text-[#E87230] font-bold text-lg">Verified</div>
+                  <div className="text-[10px] text-abu-abu dark:text-slate-500 uppercase font-bold tracking-wider">Status</div>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                  <div className="text-[#E87230] font-bold text-lg">Pro</div>
+                  <div className="text-[10px] text-abu-abu dark:text-slate-500 uppercase font-bold tracking-wider">Tier</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Menu Items */}
+            <div className="px-6 space-y-3">
+              {[
+                { icon: Heart, label: 'My Favorites', screenId: 'favorites', color: 'text-pink-pekat', bg: 'bg-pink-pekat/10' },
+                { icon: Bell, label: 'Notifications', screenId: 'notifications', color: 'text-ungu-pekat', bg: 'bg-ungu-pekat/10' },
+                { icon: MapPin, label: 'Saved Locations', screenId: 'saved_locations', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                { icon: Settings, label: 'Account Settings', screenId: 'account_settings', color: 'text-slate-500', bg: 'bg-slate-500/10' },
+              ].map((item, idx) => (
+                <button 
+                  key={idx} 
+                  onClick={() => onNavigateToScreen(item.screenId as Screen)}
+                  className="w-full bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group hover:border-[#E87230]/30 transition-colors"
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className={`w-10 h-10 ${item.bg} ${item.color} rounded-xl flex items-center justify-center`}>
+                      <item.icon size={20} />
+                    </div>
+                    <span className="font-bold text-hitam-pekat dark:text-white text-sm">{item.label}</span>
+                  </div>
+                  <ChevronRight size={18} className="text-slate-300 group-hover:text-[#E87230] transition-colors" />
+                </button>
+              ))}
+            </div>
+
+            <div className="px-6 mt-8">
+              <button 
+                onClick={handleLogout}
+                className="w-full py-4 bg-slate-100 dark:bg-slate-800 rounded-2xl text-sm font-bold text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm"
+              >
+                Log Out
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function FavoritesScreen({ onBack, onViewDetails }: { onBack: () => void; onViewDetails?: (t: Tour) => void; }) {
+  const [favorites, setFavorites] = useState<Tour[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('freesia_favorites');
+      if (stored) {
+        setFavorites(JSON.parse(stored));
+      }
+    } catch(e) {}
+  }, []);
+
+  const removeFavorite = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const newFavs = favorites.filter(f => f.id !== id);
+      setFavorites(newFavs);
+      localStorage.setItem('freesia_favorites', JSON.stringify(newFavs));
+    } catch(err) {}
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden min-h-screen"
+    >
+      <header className="px-6 py-4 flex items-center border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10 sticky top-0">
+        <button onClick={onBack} className="mr-4 text-hitam-pekat dark:text-white">
+          <ChevronLeft size={24} />
+        </button>
+        <h3 className="dark:text-white text-xl font-bold">My Favorites</h3>
+      </header>
+      
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {favorites.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center pt-20 text-center">
+            <div className="w-20 h-20 bg-pink-500/10 rounded-full flex items-center justify-center text-pink-500 mb-4">
+              <Heart size={32} />
+            </div>
+            <h4 className="text-lg font-bold text-hitam-pekat dark:text-white">No favorites yet</h4>
+            <p className="text-sm text-abu-abu dark:text-slate-400 mt-2 max-w-xs">Start exploring and heart your favorite tours to see them here.</p>
+          </div>
+        ) : (
+          favorites.map(tour => (
+            <div 
+              key={tour.id} 
+              onClick={() => onViewDetails && onViewDetails(tour)}
+              className="bg-white dark:bg-slate-900 rounded-3xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 flex items-center space-x-4 cursor-pointer hover:shadow-md transition-shadow relative"
+            >
+              <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0">
+                <img src={tour.image} alt={tour.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              </div>
+              <div className="flex-1 min-w-0 pr-8">
+                <h4 className="font-bold text-hitam-pekat dark:text-white truncate text-sm mb-1">{tour.title}</h4>
+                <div className="flex items-center text-abu-abu dark:text-slate-400 text-[10px] mb-2">
+                  <MapPin size={10} className="mr-1" />
+                  <span className="truncate">{tour.location}</span>
+                </div>
+                <div className="text-pink-pekat font-bold text-sm">
+                  ${tour.price}
+                </div>
+              </div>
+              <button 
+                onClick={(e) => removeFavorite(tour.id, e)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-rose-50 dark:bg-rose-500/10 rounded-full flex items-center justify-center text-rose-500"
+              >
+                <Heart size={14} className="fill-current" />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function NotificationsScreen({ onBack }: { onBack: () => void }) {
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden min-h-screen"
+    >
+      <header className="px-6 py-4 flex items-center border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10">
+        <button onClick={onBack} className="mr-4 text-hitam-pekat dark:text-white">
+          <ChevronLeft size={24} />
+        </button>
+        <h3 className="dark:text-white text-xl font-bold">Notifications</h3>
+      </header>
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center text-purple-500 mb-4">
+          <Bell size={32} />
+        </div>
+        <h4 className="text-lg font-bold text-hitam-pekat dark:text-white">You're all caught up</h4>
+        <p className="text-sm text-abu-abu dark:text-slate-400 mt-2 max-w-xs">There are no new notifications at this time.</p>
+      </div>
+    </motion.div>
+  );
+}
+
+function SavedLocationsScreen({ onBack }: { onBack: () => void }) {
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden min-h-screen"
+    >
+      <header className="px-6 py-4 flex items-center border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10">
+        <button onClick={onBack} className="mr-4 text-hitam-pekat dark:text-white">
+          <ChevronLeft size={24} />
+        </button>
+        <h3 className="dark:text-white text-xl font-bold">Saved Locations</h3>
+      </header>
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 mb-4">
+          <MapPin size={32} />
+        </div>
+        <h4 className="text-lg font-bold text-hitam-pekat dark:text-white">No saved locations</h4>
+        <p className="text-sm text-abu-abu dark:text-slate-400 mt-2 max-w-xs">Save interesting places from the map to access them easily.</p>
+      </div>
+    </motion.div>
+  );
+}
+
+function AccountSettingsScreen({ onBack }: { onBack: () => void }) {
+  const [user, setUser] = useState<any>(null);
+  
+  useEffect(() => {
+    import('./firebase').then(({ auth }) => {
+      setUser(auth.currentUser);
+    });
+  }, []);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden min-h-screen"
+    >
+      <header className="px-6 py-4 flex items-center border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10">
+        <button onClick={onBack} className="mr-4 text-hitam-pekat dark:text-white">
+          <ChevronLeft size={24} />
+        </button>
+        <h3 className="dark:text-white text-xl font-bold">Account Settings</h3>
+      </header>
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+           <h4 className="font-bold text-lg text-hitam-pekat dark:text-white mb-4">Personal Information</h4>
+           <div className="space-y-4">
+             <div>
+               <label className="text-xs font-semibold text-slate-500 mb-1 block">Full Name</label>
+               <input type="text" className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:outline-none" value={user?.displayName || 'Guest User'} disabled />
+             </div>
+             <div>
+               <label className="text-xs font-semibold text-slate-500 mb-1 block">Email</label>
+               <input type="email" className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:outline-none" value={user?.email || 'Not logged in'} disabled />
+             </div>
+           </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+           <h4 className="font-bold text-lg text-hitam-pekat dark:text-white mb-4">Preferences</h4>
+           <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300 font-medium">
+             <div className="flex items-center justify-between">
+               <span>Push Notifications</span>
+               <div className="w-10 h-6 bg-[#E87230]/20 rounded-full relative cursor-pointer"><div className="w-5 h-5 bg-[#E87230] rounded-full absolute top-0.5 right-0.5" /></div>
+             </div>
+             <div className="flex items-center justify-between">
+               <span>Email Newsletter</span>
+               <div className="w-10 h-6 bg-slate-200 dark:bg-slate-700 rounded-full relative cursor-pointer"><div className="w-5 h-5 bg-white dark:bg-slate-500 rounded-full absolute top-0.5 left-0.5 transition-all" /></div>
+             </div>
+           </div>
         </div>
       </div>
     </motion.div>

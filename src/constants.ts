@@ -17,6 +17,7 @@ export interface Tour {
   lng: number;
   category?: string;
   highlighted?: boolean;
+  isActivity?: boolean;
 }
 
 export const DESTINATIONS: Tour[] = [
