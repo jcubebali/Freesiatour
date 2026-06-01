@@ -1,5 +1,12 @@
 import midtransClient from 'midtrans-client';
 
+// Email validator regex matching valid standard format
+function isValidEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email.trim());
+}
+
 export default async function handler(req, res) {
   // CORS Headers support
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -19,6 +26,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  // Debug Log for incoming payload request
+  console.log('--- Midtrans Token API Call ---');
+  console.log('Request Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Request Body:', JSON.stringify(req.body, null, 2));
+
   try {
     const { 
       orderId, 
@@ -26,6 +38,7 @@ export default async function handler(req, res) {
       grossAmount, 
       customerName, 
       customerEmail, 
+      customerPhone,
       customerDetails, 
       itemDetails 
     } = req.body;
@@ -34,12 +47,59 @@ export default async function handler(req, res) {
     const finalAmount = amount || grossAmount;
 
     if (!orderId || !finalAmount) {
+      console.error('Validation Error: Missing orderId or amount/grossAmount');
       return res.status(400).json({ error: 'Missing orderId or amount' });
     }
 
     const serverKey = process.env.MIDTRANS_SERVER_KEY;
     if (!serverKey) {
+      console.error('Config Error: Midtrans Server Key is not configured');
       return res.status(500).json({ error: 'Midtrans Server Key is not configured' });
+    }
+
+    // Determine the safe & validated email
+    let validatedEmail = 'guest@freesiatour.com';
+    let rawEmailInput = '';
+
+    if (customerEmail) {
+      rawEmailInput = customerEmail;
+    } else if (customerDetails && customerDetails.email) {
+      rawEmailInput = customerDetails.email;
+    }
+
+    if (rawEmailInput && isValidEmail(rawEmailInput)) {
+      validatedEmail = rawEmailInput.trim();
+      console.log(`Email check passed: Using "${validatedEmail}"`);
+    } else {
+      console.log(`Email validation failed or missing (raw input: "${rawEmailInput}"). Falling back to "guest@freesiatour.com"`);
+    }
+
+    // Determine safe & clean name
+    let validatedName = 'Guest Customer';
+    let rawNameInput = '';
+
+    if (customerName) {
+      rawNameInput = customerName;
+    } else if (customerDetails && (customerDetails.first_name || customerDetails.name)) {
+      rawNameInput = customerDetails.first_name || customerDetails.name;
+    }
+
+    if (rawNameInput) {
+      validatedName = rawNameInput.trim();
+    }
+
+    // Determine safe & clean phone
+    let validatedPhone = '';
+    let rawPhoneInput = '';
+
+    if (customerPhone) {
+      rawPhoneInput = customerPhone;
+    } else if (customerDetails && customerDetails.phone) {
+      rawPhoneInput = customerDetails.phone;
+    }
+
+    if (rawPhoneInput) {
+      validatedPhone = rawPhoneInput.trim();
     }
 
     // Initialize Midtrans Snap client in sandbox mode
@@ -53,28 +113,23 @@ export default async function handler(req, res) {
         order_id: orderId,
         gross_amount: Math.round(Number(finalAmount)), // Midtrans expects integer
       },
+      customer_details: {
+        first_name: validatedName,
+        email: validatedEmail,
+        phone: validatedPhone,
+      }
     };
-
-    // Support both personalized name/email and nested customerDetails objects
-    if (customerName || customerEmail) {
-      parameter.customer_details = {
-        first_name: customerName,
-        email: customerEmail || '',
-      };
-    } else if (customerDetails) {
-      parameter.customer_details = {
-        first_name: customerDetails.first_name || customerDetails.name || '',
-        email: customerDetails.email || '',
-        phone: customerDetails.phone || '',
-      };
-    }
 
     if (itemDetails) {
       parameter.item_details = itemDetails;
     }
 
+    console.log('Sending following parameters to Midtrans snap API:', JSON.stringify(parameter, null, 2));
+
     const transaction = await snap.createTransaction(parameter);
     
+    console.log('Successfully generated Midtrans snap token:', transaction.token);
+
     return res.status(200).json({ 
       token: transaction.token,
       redirectUrl: transaction.redirect_url 

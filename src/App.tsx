@@ -2523,6 +2523,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    email: '',
     date: '',
     travelers: '' as any,
     pickupAddress: isRideBooking ? tour.location.split(' to ')[0] : '',
@@ -2568,6 +2569,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
         tourTitle: tour.title,
         customerName: formData.name,
         customerPhone: formData.phone,
+        customerEmail: formData.email,
         date: formData.date,
         travelers: parseInt(formData.travelers as any) || 0,
         pickupAddress: formData.pickupAddress,
@@ -2585,11 +2587,10 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId,
-          grossAmount: totalIdr,
-          customerDetails: {
-             first_name: formData.name,
-             phone: formData.phone
-          },
+          amount: totalIdr,
+          customerName: formData.name,
+          customerEmail: formData.email,
+          customerPhone: formData.phone,
           itemDetails: [{
              id: tour.id,
              price: totalIdr,
@@ -2637,6 +2638,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
       `*Booking Details:*\n` +
       `- Name: ${formData.name}\n` +
       `- Phone: ${formData.phone}\n` +
+      `- Email: ${formData.email || '-'}\n` +
       `- Date: ${formData.date}\n` +
       `- Travelers: ${formData.travelers}\n` +
       `- Pickup: ${formData.pickupAddress}\n` +
@@ -2733,6 +2735,17 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
               className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all"
               value={formData.phone}
               onChange={(e) => setFormData({...formData, phone: e.target.value})}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-500">Email Address (Optional)</label>
+            <input 
+              type="email" 
+              placeholder="e.g. guest@freesiatour.com"
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all"
+              value={formData.email}
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
             />
           </div>
 
