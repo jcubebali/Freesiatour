@@ -35,6 +35,8 @@ import {
 } from 'firebase/firestore';
 import { 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider, 
   signOut,
   onAuthStateChanged,
@@ -107,6 +109,8 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
 
   // Status message
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [showTroubleshooting, setShowTroubleshooting] = useState<boolean>(false);
 
   // Modal / Form state
   const [currentEditItem, setCurrentEditItem] = useState<any | null>(null);
@@ -146,6 +150,28 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
       setAuthLoading(false);
     });
     return unsubscribe;
+  }, [lang]);
+
+  // Handle redirect authentication result
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          setUser(result.user);
+          const isUserAdmin = result.user.email === 'jcube.bali@gmail.com' || result.user.email === 'john.doe@example.com';
+          setIsAdmin(isUserAdmin);
+          if (isUserAdmin) {
+            showNotification('success', lang === 'id' ? 'Selamat datang Admin!' : 'Welcome back Admin!');
+          } else {
+            showNotification('error', lang === 'id' ? 'Akses ditolak: Anda bukan Admin!' : 'Access denied: You are not an Admin!');
+          }
+        }
+      })
+      .catch((error) => {
+        console.error("Redirect auth error: ", error);
+        setAuthError(error.message);
+        showNotification('error', 'Authentication failed: ' + error.message);
+      });
   }, [lang]);
 
   // Load all data when Admin is confirmed
@@ -227,12 +253,28 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
   };
 
   const handleGoogleSignIn = async () => {
+    setAuthError(null);
     try {
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
-    } catch (err) {
-      console.error("Sign-in error: ", err);
+    } catch (err: any) {
+      console.error("Popup Sign-in error: ", err);
+      setAuthError(err.message || String(err));
       showNotification('error', 'Sign-in failed: ' + (err as Error).message);
+    }
+  };
+
+  const handleGoogleSignInRedirect = async () => {
+    setAuthError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithRedirect(auth, provider);
+    } catch (err: any) {
+      console.error("Redirect Sign-in error: ", err);
+      setAuthError(err.message || String(err));
+      showNotification('error', 'Redirect sign-in initialization failed: ' + (err as Error).message);
     }
   };
 
@@ -488,22 +530,108 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
             )}
 
             {!user ? (
-              <button 
-                onClick={handleGoogleSignIn}
-                className="w-full py-4 px-6 bg-white hover:bg-slate-100 dark:hover:bg-slate-100 text-slate-950 rounded-2xl font-bold flex items-center justify-center space-x-4 transition-all shadow-xl hover:scale-[1.02]"
-              >
-                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22c-.62-.06-1.18-.35-1.67-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                <span>{lang === 'id' ? 'Masuk dengan Google' : 'Sign in with Google'}</span>
-              </button>
+              <div className="space-y-4">
+                <button 
+                  onClick={handleGoogleSignIn}
+                  className="w-full py-4 px-6 bg-white hover:bg-slate-100 dark:hover:bg-slate-100 text-slate-950 rounded-2xl font-bold flex items-center justify-center space-x-4 transition-all shadow-xl hover:scale-[1.01]"
+                >
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22c-.62-.06-1.18-.35-1.67-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                  <span>{lang === 'id' ? 'Masuk dengan Google (Popup)' : 'Sign in with Google (Popup)'}</span>
+                </button>
+
+                <button 
+                  onClick={handleGoogleSignInRedirect}
+                  className="w-full py-4 px-6 bg-slate-800 hover:bg-slate-700 text-white border border-white/10 rounded-2xl font-bold flex items-center justify-center space-x-3 transition-all"
+                >
+                  <svg className="w-5 h-5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                  </svg>
+                  <span>{lang === 'id' ? 'Masuk dengan Google (Redirect Mode)' : 'Sign in with Google (Redirect Mode)'}</span>
+                </button>
+
+                {/* Error message container */}
+                {authError && (
+                  <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-200 text-xs text-left leading-relaxed">
+                    <p className="font-bold flex items-center space-x-1.5 mb-1 text-red-400">
+                      <AlertCircle size={14} className="shrink-0" />
+                      <span>{lang === 'id' ? 'Log Masalah Autentikasi' : 'Authentication Issue Log'}</span>
+                    </p>
+                    <p className="font-mono bg-black/30 p-2 rounded-lg border border-red-500/10 overflow-x-auto max-h-20 scrollbar-thin">
+                      {authError}
+                    </p>
+                  </div>
+                )}
+
+                {/* Troubleshooting trigger button */}
+                <div className="pt-2 text-center">
+                  <button
+                    onClick={() => setShowTroubleshooting(!showTroubleshooting)}
+                    className="text-xs text-[#E87230] hover:underline inline-flex items-center space-x-1 font-medium transition-all"
+                  >
+                    <span>{showTroubleshooting ? (lang === 'id' ? 'Sembunyikan Solusi' : 'Hide Troubleshooting Solution') : (lang === 'id' ? 'Kenapa Tombol Google tidak berfungsi?' : 'Why is Google Login not working?')}</span>
+                  </button>
+                </div>
+
+                {/* Step-by-Step Troubleshooting Section */}
+                <AnimatePresence>
+                  {(showTroubleshooting || authError) && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="text-left mt-2 border-t border-white/5 pt-4 overflow-hidden"
+                    >
+                      <div className="bg-slate-950 p-4 rounded-2xl border border-white/5 text-[11px] leading-relaxed text-slate-300 space-y-3 max-h-72 overflow-y-auto scrollbar-thin">
+                        <p className="font-bold text-[#E87230] text-xs">
+                          {lang === 'id' ? '🛠️ Cara Mengatasi Tombol Google Blok (di Vercel / HP)' : '🛠️ Fix Google Auth on Deployed Apps (Vercel & Mobile)'}
+                        </p>
+
+                        <div className="space-y-2">
+                          <p className="font-semibold text-white">
+                            {lang === 'id' ? '1. Tambahkan Domain Vercel ke FIrebase (Halaman Resmi):' : '1. Whitelist Vercel Domain in Firebase Console:'}
+                          </p>
+                          <ul className="list-disc pl-4 space-y-1">
+                            <li>{lang === 'id' ? 'Buka Firebase Console -> Pilih project Anda.' : 'Go to Firebase Console -> Select your project.'}</li>
+                            <li>{lang === 'id' ? 'Klik Authentication -> Tab "Settings" (Pengaturan) -> Pilih "Authorized domains" (Domain terotorisasi).' : 'Go to Authentication -> "Settings" tab -> Choose "Authorized domains".'}</li>
+                            <li>{lang === 'id' ? 'Klik "Add Domain", lalu tambahkan domain Vercel Anda (contoh: freasiatour.vercel.app atau domain custom Anda).' : 'Click "Add Domain" and input your exact Vercel URL (e.g., your-app.vercel.app or your custom domain).'}</li>
+                          </ul>
+                        </div>
+
+                        <div className="space-y-2 border-t border-white/5 pt-2">
+                          <p className="font-semibold text-white">
+                            {lang === 'id' ? '2. Gunakan Redirect Mode di HP:' : '2. Mobile Safari / Pop-up Restrictions:'}
+                          </p>
+                          <p>
+                            {lang === 'id' 
+                              ? 'HP (terutama Safari & browser di dalam WhatsApp/Instagram) sering memblokir pop-up sign-in Google. Klik tombol "Redirect Mode" di atas untuk log-in via pengalihan halaman resmi.' 
+                              : 'Mobile devices are designed to auto-block popups. Click the "Redirect Mode" button above so the page safely redirects to Google instead of launching a window.'}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2 border-t border-white/5 pt-2">
+                          <p className="font-semibold text-white">
+                            {lang === 'id' ? '3. Aktifkan Google Sign-in Provider:' : '3. Make sure Google provider is Enabled:'}
+                          </p>
+                          <p>
+                            {lang === 'id' 
+                              ? 'Pastikan di Firebase Console -> Authentication -> tab Sign-in Method, Google statusnya adalah "Enabled" (Aktif).' 
+                              : 'Ensure that Google is toggled ON under Firebase Console -> Authentication -> Sign-in Method tab.'}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             ) : (
               <button 
                 onClick={handleSignOut}
-                className="w-full py-4 px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-bold flex items-center justify-center space-x-2 transition-all"
+                className="w-full py-4 px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-bold flex items-center justify-center space-x-2 transition-all shadow-lg"
               >
                 <LogOut size={18} />
                 <span>{lang === 'id' ? 'Keluar / Ganti Akun' : 'Log Out / Switch Account'}</span>

@@ -2,8 +2,12 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/server.ts"
+      "source": "/api/midtrans/token",
+      "destination": "/api/midtrans/token.js"
+    },
+    {
+      "source": "/api/midtrans/webhook",
+      "destination": "/api/midtrans/webhook.js"
     },
     {
       "source": "/(.*)",
