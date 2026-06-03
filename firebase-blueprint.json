@@ -99,6 +99,25 @@
         "name": { "type": "string" }
       },
       "required": ["id"]
+    },
+    "TourSlot": {
+      "title": "TourSlot",
+      "description": "Group tour dynamic slot with max 7 participants",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tourId": { "type": "string" },
+        "date": { "type": "string" },
+        "groupNumber": { "type": "number" },
+        "participants": { "type": "number" },
+        "maxParticipants": { "type": "number", "enum": [7] },
+        "status": { "type": "string", "enum": ["open", "full"] },
+        "pricePerPerson": { "type": "number" },
+        "bookingIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "tourId", "date", "groupNumber", "participants", "maxParticipants", "status", "pricePerPerson", "bookingIds", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -125,6 +144,10 @@
     "tours": {
       "schema": "Tour",
       "description": "Collection of tour packages"
+    },
+    "tour_slots": {
+      "schema": "TourSlot",
+      "description": "Collection of open and full group tour active slots"
     }
   }
 }

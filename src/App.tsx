@@ -54,6 +54,8 @@ import { fetchTours, fetchActivities, Activity, fetchSettings } from './services
 import { ACTIVITIES, VEHICLES_DATA } from './calculatorData';
 import AdminDashboard from './components/AdminDashboard';
 import { loginWithEmail, registerWithEmail, loginWithGoogle, logoutUser } from './firebaseAuth';
+import { useGroupTourSlot } from './hooks/useGroupTourSlot';
+import { joinGroupTour, getActiveSlot } from './services/groupTourService';
 
 const MAP_API_KEY = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY || '';
 const hasValidMapKey = Boolean(MAP_API_KEY) && MAP_API_KEY !== 'YOUR_API_KEY';
@@ -193,7 +195,7 @@ const calculateShuttlePrice = (distanceStr: string, durationStr: string, multipl
 };
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('splash');
+  const [screen, setScreen] = useState<Screen>('home');
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -336,6 +338,11 @@ export default function App() {
   };
 
   if (screen === 'calculator') {
+    const isGuest = !currentUser || currentUser.isAnonymous || !currentUser.email;
+    if (isGuest) {
+      setScreen('splash');
+      return null;
+    }
     return <BaliQuoteApp lang={lang} currency={currency} onClose={() => setScreen('home')} />;
   }
 
@@ -454,7 +461,14 @@ export default function App() {
               setSelectedCategory(cat);
               setScreen('category');
             }}
-            onCalculatorClick={() => setScreen('calculator')}
+            onCalculatorClick={() => {
+              const isGuest = !currentUser || currentUser.isAnonymous || !currentUser.email;
+              if (isGuest) {
+                setScreen('splash');
+              } else {
+                setScreen('calculator');
+              }
+            }}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             pickupQuery={pickupQuery}
@@ -499,6 +513,8 @@ export default function App() {
             onBook={() => setScreen('booking')}
             currency={currency}
             lang={lang}
+            currentUser={currentUser}
+            onNavigateToSplash={() => setScreen('splash')}
           />
         )}
 
@@ -658,7 +674,12 @@ export default function App() {
                     <button
                       key={item.id}
                       onClick={() => {
-                        setScreen(item.id as Screen);
+                        const isGuestUser = !currentUser || currentUser.isAnonymous || !currentUser.email;
+                        if (item.id === 'profile' && isGuestUser) {
+                          setScreen('splash');
+                        } else {
+                          setScreen(item.id as Screen);
+                        }
                         setShowSidebar(false);
                       }}
                       className={`w-full flex items-center space-x-4 p-4 rounded-2xl transition-all ${
@@ -811,24 +832,24 @@ function SplashScreen({ onContinue, lang }: { onContinue: () => void; lang: 'en'
           </div>
 
           <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 my-8">
-            <div className="relative w-40 h-40 mb-4">
+            <div className="relative w-44 h-44 mb-4 flex items-center justify-center">
               <motion.div 
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="absolute inset-0 bg-ungu-muda rounded-full"
+                className="absolute inset-0 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl shadow-lg"
               />
               <motion.div
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.4 }}
-                className="relative z-10 flex flex-col items-center"
+                className="relative z-10 flex flex-col items-center justify-center"
               >
-                 <div className="w-28 h-28 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-xl mb-4 overflow-hidden">
+                 <div className="w-32 h-32 flex items-center justify-center overflow-hidden">
                     <img 
                       src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771789006/freesiatour_logo.png" 
                       alt="Freesiatour Logo" 
-                      className="w-full h-full object-contain p-0 scale-[1.35]"
+                      className="w-full h-full object-contain p-0 scale-[1.1]"
                       referrerPolicy="no-referrer"
                       loading="lazy"
                       decoding="async"
@@ -842,17 +863,12 @@ function SplashScreen({ onContinue, lang }: { onContinue: () => void; lang: 'en'
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.6 }}
             >
-              <div className="flex items-center justify-center gap-0 mb-2">
-                <img 
-                  src="https://res.cloudinary.com/dbckdslrw/image/upload/v1771789006/freesiatour_logo.png" 
-                  alt="" 
-                  className="w-9 h-9 object-contain scale-[1.35]"
-                />
+              <div className="flex flex-col items-center justify-center mb-2">
                 <div className="flex flex-col items-center justify-center">
-                  <span className="font-display font-black text-[#E87230]" dark:text-white w-full text-center px-2 uppercase leading-none tracking-tight text-2xl animate-pulse>
+                  <span className="font-display font-black text-[#E87230] dark:text-white w-full text-center uppercase leading-none tracking-tight text-2xl animate-pulse">
                     FREESIATOUR
                   </span>
-                  <span className="font-display font-bold text-white uppercase text-[10px] tracking-[0.16em] w-full text-center px-1.5 py-[2px]">
+                  <span className="font-display font-bold text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-[0.16em] w-full text-center py-[2px] mt-0.5">
                     HOLIDAY IS FRIENDLY
                   </span>
                 </div>
@@ -2617,7 +2633,7 @@ function CategoryScreen({
 
 // removed
 
-function DetailsScreen({ tour, onBack, onBook, currency, lang }: { tour: Tour; onBack: () => void; onBook: () => void; currency: Currency; lang: 'en' | 'id' }) {
+function DetailsScreen({ tour, onBack, onBook, currency, lang, currentUser, onNavigateToSplash }: { tour: Tour; onBack: () => void; onBook: () => void; currency: Currency; lang: 'en' | 'id'; currentUser: any; onNavigateToSplash: () => void }) {
   const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
@@ -2639,6 +2655,11 @@ function DetailsScreen({ tour, onBack, onBook, currency, lang }: { tour: Tour; o
   }, [tour.id]);
 
   const toggleFavorite = () => {
+    const isGuest = !currentUser || currentUser.isAnonymous || !currentUser.email;
+    if (isGuest) {
+      onNavigateToSplash();
+      return;
+    }
     try {
       const stored = localStorage.getItem('freesia_favorites') || '[]';
       let favorites = JSON.parse(stored);
@@ -2925,7 +2946,6 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
   
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    // Also scroll the container if it's overflow-y-auto
     const container = document.querySelector('.overflow-y-auto');
     if (container) {
       container.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2945,6 +2965,16 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
   const [isSuccess, setIsSuccess] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+
+  // Group booking state
+  const [bookingType, setBookingType] = useState<'private' | 'group'>('private');
+  const [lastGroupNumber, setLastGroupNumber] = useState<number | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [successBookingInfo, setSuccessBookingInfo] = useState<{
+    groupNumber?: number;
+    otherParticipants?: number;
+    bookingType: 'private' | 'group';
+  } | null>(null);
 
   useEffect(() => {
     let unsubscribe: any = null;
@@ -2975,6 +3005,37 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
     }
   }, []);
 
+  // Hook into active group slot
+  const { slot, spotsLeft, loading: slotLoading } = useGroupTourSlot(
+    bookingType === 'group' && !isRideBooking ? tour.id : '',
+    formData.date
+  );
+
+  // Show a toast if group auto-rotates because it filled up
+  useEffect(() => {
+    if (slot && slot.groupNumber) {
+      if (lastGroupNumber !== null && slot.groupNumber !== lastGroupNumber) {
+        setToast(lang === 'id' 
+          ? `Grup #${lastGroupNumber} sudah penuh. Anda otomatis dipindahkan ke grup baru #${slot.groupNumber}.`
+          : `Group #${lastGroupNumber} is now full. You have been automatically moved to Group #${slot.groupNumber}.`
+        );
+        setTimeout(() => setToast(null), 5000);
+      }
+      setLastGroupNumber(slot.groupNumber);
+    }
+  }, [slot?.groupNumber]);
+
+  // Pricing calculations
+  const isGroupType = bookingType === 'group' && !isRideBooking;
+  const groupPricePerPerson = slot?.pricePerPerson || (tour.price ? tour.price * 16000 : 720000);
+  const travelersCount = parseInt(formData.travelers as any) || 1;
+
+  const finalTotalIdr = isGroupType 
+    ? groupPricePerPerson * travelersCount 
+    : (tour.isActivity && !isRideBooking ? tour.price * travelersCount * USD_TO_IDR : tour.price * USD_TO_IDR);
+
+  const finalTotalUsd = finalTotalIdr / USD_TO_IDR;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -2999,12 +3060,29 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
         return;
       }
 
+      // Check slot capacity if joining group tour
+      if (isGroupType) {
+        if (!formData.date) {
+          alert(lang === 'id' ? 'Silakan pilih tanggal perjalanan terlebih dahulu' : 'Please select a travel date first');
+          return;
+        }
+        if (!slot) {
+          alert(lang === 'id' ? 'Sesi grup sedang dimuat, silakan coba lagi' : 'Group slot is loading, please try again');
+          return;
+        }
+        if (travelersCount > spotsLeft) {
+          alert(lang === 'id' 
+            ? `Hanya ada ${spotsLeft} tempat tersisa di Grup #${slot.groupNumber}.` 
+            : `Only ${spotsLeft} spots left in Group #${slot.groupNumber}.`
+          );
+          return;
+        }
+      }
+
       setEmailError(null);
       setIsSubmitting(true);
       
       const orderId = 'FREESIA-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-      const totalUsd = Math.round((tour.isActivity && !isRideBooking) ? tour.price * (parseInt(formData.travelers as any) || 1) : tour.price);
-      const totalIdr = totalUsd * USD_TO_IDR;
       
       let userId = user?.uid;
       if (!userId) {
@@ -3021,23 +3099,44 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
         customerPhone: formData.phone,
         customerEmail: activeEmail.trim(),
         date: formData.date,
-        travelers: parseInt(formData.travelers as any) || 0,
+        travelers: travelersCount,
         pickupAddress: formData.pickupAddress,
         notes: formData.note,
-        totalUsd: totalUsd,
-        totalIdr: totalIdr,
+        totalUsd: finalTotalUsd,
+        totalIdr: finalTotalIdr,
         paymentStatus: 'pending',
-        createdAt: serverTimestamp()
       };
+
+      // Store group states for success screen
+      let successGroupNum: number | undefined;
+      let otherPart: number | undefined;
+
+      if (isGroupType && slot) {
+        successGroupNum = slot.groupNumber;
+        otherPart = slot.participants;
+      }
+
+      // 1. Process booking creation inside Firestore
+      if (isGroupType && slot) {
+        await joinGroupTour(slot.id, {
+          ...bookingData,
+          participants: travelersCount
+        });
+      } else {
+        await setDoc(doc(db, 'bookings', orderId), {
+          ...bookingData,
+          bookingType: 'private',
+          createdAt: serverTimestamp()
+        });
+      }
       
-      await setDoc(doc(db, 'bookings', orderId), bookingData);
-      
+      // 2. Fetch Snap token from endpoint
       const res = await fetch('/api/midtrans/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId,
-          grossAmount: totalIdr,
+          grossAmount: finalTotalIdr,
           customerDetails: {
             first_name: formData.name,
             email: activeEmail.trim(),
@@ -3045,9 +3144,9 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
           },
           itemDetails: [{
              id: tour.id,
-             price: totalIdr,
+             price: finalTotalIdr,
              quantity: 1,
-             name: tour.title.substring(0, 50)
+             name: `${tour.title.substring(0, 30)} (${isGroupType ? 'Group' : 'Private'})`
           }]
         })
       });
@@ -3059,10 +3158,20 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
         (window as any).snap.pay(data.token, {
           onSuccess: function(result: any){
             setIsSubmitting(false);
+            setSuccessBookingInfo({
+              groupNumber: successGroupNum,
+              otherParticipants: otherPart,
+              bookingType: bookingType
+            });
             setIsSuccess(true);
           },
           onPending: function(result: any){
             setIsSubmitting(false);
+            setSuccessBookingInfo({
+              groupNumber: successGroupNum,
+              otherParticipants: otherPart,
+              bookingType: bookingType
+            });
             setIsSuccess(true);
           },
           onError: function(result: any){
@@ -3086,16 +3195,24 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
   };
 
   if (isSuccess) {
-    const message = `Hi Freesiatour, I'd like to book ${tour.title}.\n\n` +
+    const isGroupSuccess = successBookingInfo?.bookingType === 'group';
+    let confirmationLabel = lang === 'en' ? 'Booking Successful!' : 'Pemesanan Berhasil!';
+    if (isGroupSuccess && successBookingInfo?.groupNumber) {
+      confirmationLabel = lang === 'en' 
+        ? `You've joined Group #${successBookingInfo.groupNumber}!` 
+        : `Anda telah bergabung di Grup #${successBookingInfo.groupNumber}!`;
+    }
+
+    const message = `Hi Freesiatour, I'd like to book ${tour.title} (${isGroupSuccess ? 'Group Tour' : 'Private Tour'}).\n\n` +
       `*Booking Details:*\n` +
       `- Name: ${formData.name}\n` +
       `- Phone: ${formData.phone}\n` +
       `- Email: ${formData.email || '-'}\n` +
       `- Date: ${formData.date}\n` +
-      `- Travelers: ${formData.travelers}\n` +
+      `- Travelers: ${travelersCount}\n` +
       `- Pickup: ${formData.pickupAddress}\n` +
       `- Notes: ${formData.note || '-'}\n\n` +
-      `Total: ${currency} ${Math.round((tour.isActivity && !isRideBooking) ? tour.price * (parseInt(formData.travelers as any) || 1) : tour.price).toLocaleString()}` +
+      `Total: ${currency} ${finalTotalUsd.toLocaleString()}` +
       `\n(Payment status: Paid/Pending via Midtrans)`;
 
     return (
@@ -3108,8 +3225,19 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
           <CheckCircle2 size={40} />
         </div>
         <h2 className="dark:text-white mb-2 text-3xl font-bold">
-          {isRideBooking ? (lang === 'en' ? 'Ride Booked!' : 'Ride Berhasil Dipesan!') : (lang === 'en' ? 'Booking Successful!' : 'Pemesanan Berhasil!')}
+          {isRideBooking ? (lang === 'en' ? 'Ride Booked!' : 'Ride Berhasil Dipesan!') : confirmationLabel}
         </h2>
+        
+        {isGroupSuccess && successBookingInfo && (
+          <div className="mb-6 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 font-bold rounded-2xl border border-emerald-100 text-sm">
+            {successBookingInfo.otherParticipants === 0 ? (
+              <span>🌟 {lang === 'id' ? 'Anda peserta pertama di grup ini!' : "You're the first traveler in this group!"}</span>
+            ) : (
+              <span>👥 {lang === 'id' ? `You + ${successBookingInfo.otherParticipants} other travelers` : `You + ${successBookingInfo.otherParticipants} other travelers`}</span>
+            )}
+          </div>
+        )}
+
         <p className="text-hitam-pekat dark:text-slate-300 text-body-2 mb-8">
           {isRideBooking 
             ? (lang === 'en' ? `Your ${tour.title} from ${formData.pickupAddress} has been booked. Please click the button below to send the details to our WhatsApp.` : `Layanan ${tour.title} Anda dari ${formData.pickupAddress} telah dipesan. Silakan klik tombol di bawah untuk mengirim detail ke WhatsApp kami.`)
@@ -3154,6 +3282,12 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
         </h3>
       </header>
 
+      {toast && (
+        <div className="mx-6 mt-4 bg-[#E87230] text-white text-xs font-bold font-sans rounded-xl p-3 shadow-md border border-[#E87230]/20 animate-bounce text-center">
+          🔔 {toast}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="p-6 space-y-6">
         <div className="bg-ungu-muda/10 dark:bg-ungu-pekat/5 p-4 rounded-2xl flex items-center space-x-4 mb-2">
           <img src={tour.image} alt={tour.title} className="w-16 h-16 rounded-xl object-cover" referrerPolicy="no-referrer" loading="lazy" />
@@ -3164,6 +3298,98 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
             </div>
           </div>
         </div>
+
+        {/* Group / Private Toggle Selector */}
+        {!isRideBooking && (
+          <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-100 dark:border-slate-700/50">
+            <button
+              type="button"
+              onClick={() => {
+                setBookingType('private');
+                setFormData({ ...formData, travelers: '' });
+              }}
+              className={`py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                bookingType === 'private'
+                  ? 'bg-[#E87230] text-white shadow-md shadow-[#E87230]/10'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+              }`}
+            >
+              💼 {lang === 'id' ? 'Tur Privat' : 'Private Tour'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBookingType('group');
+                setFormData({ ...formData, travelers: 1 });
+              }}
+              className={`py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                bookingType === 'group'
+                  ? 'bg-[#E87230] text-white shadow-md shadow-[#E87230]/10'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+              }`}
+            >
+              👥 {lang === 'id' ? 'Gabung Grup' : 'Join Group'}
+            </button>
+          </div>
+        )}
+
+        {/* Group availability card */}
+        {bookingType === 'group' && !isRideBooking && (
+          <div className="transition-all duration-300">
+            {!formData.date ? (
+              <div className="text-center p-4 bg-slate-50 dark:bg-slate-800/20 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl text-xs text-slate-500 dark:text-slate-400">
+                📅 {lang === 'id' ? 'Silakan pilih tanggal perjalanan untuk melihat ketersediaan grup.' : 'Please select travel date to view group availability.'}
+              </div>
+            ) : slotLoading ? (
+              <div className="flex items-center justify-center p-6 space-x-2 text-xs text-slate-500">
+                <Loader2 className="animate-spin text-[#E87230]" size={16} />
+                <span>{lang === 'id' ? 'Memuat info grup...' : 'Loading group details...'}</span>
+              </div>
+            ) : (
+              <div className="border border-[#E87230]/30 bg-[#E87230]/5 rounded-2xl p-4 flex flex-col space-y-2 relative overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="absolute right-0 top-0 bg-[#E87230]/10 text-[#E87230] text-[10px] font-black uppercase px-3 py-1.5 rounded-bl-xl tracking-wider">
+                  🟢 {lang === 'id' ? 'Grup Tersedia' : 'Group Tour Available'}
+                </div>
+                <div className="font-display font-black text-slate-800 dark:text-white text-lg">
+                  Group #{slot?.groupNumber || '1'}
+                </div>
+                <div className="flex justify-between items-center text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  <span>👥 {spotsLeft} {lang === 'id' ? 'kursi tersisa' : 'spots left'}</span>
+                  <span className="text-[#E87230]">Rp {groupPricePerPerson.toLocaleString('id-ID')} / {lang === 'id' ? 'orang' : 'person'}</span>
+                </div>
+                
+                {formData.travelers > spotsLeft && (
+                  <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl space-y-2">
+                    <p className="text-xs text-red-500 font-bold leading-normal">
+                      ⚠️ {lang === 'id' 
+                        ? `Hanya ada ${spotsLeft} tempat tersisa di Grup #${slot?.groupNumber}. Bagi pesanan Anda atau pilih Tur Privat.` 
+                        : `Only ${spotsLeft} spots left in current Group #${slot?.groupNumber}. Split your booking or choose Private Tour.`}
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, travelers: spotsLeft })}
+                        className="flex-1 py-1.5 bg-red-500 text-white font-black text-[10px] uppercase rounded-lg shadow-sm hover:bg-red-600 transition-all cursor-pointer"
+                      >
+                        {lang === 'id' ? `Pesan ${spotsLeft} Kursi` : `Book ${spotsLeft} spots`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBookingType('private');
+                          setFormData({ ...formData, travelers: '' });
+                        }}
+                        className="flex-1 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-white font-bold text-[10px] uppercase border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm cursor-pointer"
+                      >
+                        {lang === 'id' ? 'Ganti Privat' : 'Switch Private'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -3231,7 +3457,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
                 <button
                   type="button"
                   onClick={() => setShowRouteMap(!showRouteMap)}
-                  className="text-xs font-bold text-[#E87230] hover:underline"
+                  className="text-xs font-bold text-[#E87230] hover:underline cursor-pointer"
                 >
                   {showRouteMap ? (lang === 'en' ? 'Hide Route Map' : 'Tutup Peta Rute') : (lang === 'en' ? 'View Route Map' : 'Lihat Peta Rute')}
                 </button>
@@ -3300,6 +3526,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
                   required
                   type="number" 
                   min="1"
+                  max={bookingType === 'group' && !isRideBooking ? 7 : undefined}
                   placeholder="Count"
                   className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pl-11 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-[#E87230]/20 focus:border-[#E87230] outline-none transition-all"
                   value={formData.travelers}
@@ -3324,8 +3551,8 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
         <div className="pt-4">
           <button 
             type="submit"
-            disabled={isSubmitting}
-            className="btn-primary w-full disabled:opacity-50 flex items-center justify-center space-x-2"
+            disabled={isSubmitting || (bookingType === 'group' && !isRideBooking && formData.travelers > spotsLeft)}
+            className="btn-primary w-full disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer"
           >
             {isSubmitting ? (
               <>
@@ -3333,7 +3560,14 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
                 <span>Processing...</span>
               </>
             ) : (
-              <span>{lang === 'en' ? 'Confirm Booking' : 'Konfirmasi Pesanan'} • <PriceDisplay priceUsd={(tour.isActivity && !isRideBooking) ? tour.price * (parseInt(formData.travelers as any) || 1) : tour.price} currency={currency} /></span>
+              <span>
+                {lang === 'en' ? 'Confirm Booking' : 'Konfirmasi Pesanan'} •{' '}
+                {currency === 'IDR' ? (
+                  <span>Rp {finalTotalIdr.toLocaleString('id-ID')}</span>
+                ) : (
+                  <span>USD ${finalTotalUsd.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+                )}
+              </span>
             )}
           </button>
           <p className="text-center text-xs text-abu-abu mt-4">
@@ -4167,7 +4401,13 @@ function ProfileScreen({ onBack, onNavigateToSplash, onNavigateToScreen }: { onB
 
   const isGuest = !user || user.isAnonymous || !user.email;
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading && isGuest) {
+      onNavigateToSplash();
+    }
+  }, [loading, isGuest, onNavigateToSplash]);
+
+  if (loading || isGuest) {
     return (
       <div className="flex-1 flex items-center justify-center p-8 bg-white dark:bg-slate-900 min-h-screen">
         <Loader2 className="animate-spin text-[#E87230]" size={36} />

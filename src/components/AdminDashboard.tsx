@@ -91,7 +91,7 @@ interface AdminDashboardProps {
   onSettingsUpdated?: (newExchangeRate: number) => void;
 }
 
-type TabType = 'tours' | 'activities' | 'destinations' | 'vehicles' | 'settings';
+type TabType = 'tours' | 'activities' | 'destinations' | 'vehicles' | 'settings' | 'slots';
 
 export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: AdminDashboardProps) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -104,8 +104,17 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
   const [activitiesList, setActivitiesList] = useState<Activity[]>([]);
   const [destinationsList, setDestinationsList] = useState<Destination[]>([]);
   const [vehiclesList, setVehiclesList] = useState<Vehicle[]>([]);
+  const [slotsList, setSlotsList] = useState<any[]>([]);
   const [settingsData, setSettingsData] = useState<Settings | null>(null);
   const [dataLoading, setDataLoading] = useState<boolean>(false);
+
+  // Slots management states
+  const [manifestBookings, setManifestBookings] = useState<any[]>([]);
+  const [activeManifestSlot, setActiveManifestSlot] = useState<any | null>(null);
+  const [loadingManifest, setLoadingManifest] = useState<boolean>(false);
+  const [newSlotTourId, setNewSlotTourId] = useState<string>('');
+  const [newSlotDate, setNewSlotDate] = useState<string>('');
+  const [newSlotPrice, setNewSlotPrice] = useState<number>(750000);
 
   // Status message
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -208,6 +217,13 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
       vehiclesSnap.forEach(d => fetchedVehicles.push({ id: d.id, ...d.data() } as Vehicle));
       setVehiclesList(fetchedVehicles);
 
+      // Tour Slots
+      const slotsSnap = await getDocs(collection(db, 'tour_slots'));
+      const fetchedSlots: any[] = [];
+      slotsSnap.forEach(d => fetchedSlots.push({ id: d.id, ...d.data() }));
+      fetchedSlots.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      setSlotsList(fetchedSlots);
+
       // Settings
       const settingsSnap = await getDocs(collection(db, 'settings'));
       if (!settingsSnap.empty) {
@@ -245,6 +261,91 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
       showNotification('error', 'Error loading Firestore data');
     } finally {
       setDataLoading(false);
+    }
+  };
+
+  const handleToggleSlotStatus = async (slotId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'open' ? 'full' : 'open';
+    try {
+      await updateDoc(doc(db, 'tour_slots', slotId), {
+        status: newStatus,
+        updatedAt: new Date().toISOString()
+      });
+      showNotification('success', lang === 'id' ? `Status grup diubah menjadi ${newStatus}` : `Group status changed to ${newStatus}`);
+      loadAllData();
+    } catch (err) {
+      console.error("Error updating slot status:", err);
+      showNotification('error', 'Error updating slot status');
+    }
+  };
+
+  const handleCreateSlotManually = async () => {
+    if (!newSlotTourId || !newSlotDate) {
+      alert(lang === 'id' ? 'Silakan pilih tour dan tanggal terlebih dahulu.' : 'Please select tour and date first.');
+      return;
+    }
+    try {
+      const selectedTour = toursList.find(t => t.id === newSlotTourId);
+      if (!selectedTour) return;
+
+      const { query, where } = await import('firebase/firestore');
+      const slotsRef = collection(db, 'tour_slots');
+      const q = query(slotsRef, where('tourId', '==', newSlotTourId), where('date', '==', newSlotDate));
+      const snap = await getDocs(q);
+      let maxGroupNum = 0;
+      snap.forEach(d => {
+        const data = d.data();
+        if (data.groupNumber > maxGroupNum) {
+          maxGroupNum = data.groupNumber;
+        }
+      });
+      const nextGroupNum = maxGroupNum + 1;
+      const slotId = `${newSlotTourId}-${newSlotDate}-group-${nextGroupNum}`;
+
+      await setDoc(doc(db, 'tour_slots', slotId), {
+        id: slotId,
+        tourId: newSlotTourId,
+        date: newSlotDate,
+        groupNumber: nextGroupNum,
+        participants: 0,
+        maxParticipants: 7,
+        status: 'open',
+        pricePerPerson: Number(newSlotPrice) || 750000,
+        bookingIds: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      showNotification('success', lang === 'id' ? `Slot Grup #${nextGroupNum} berhasil dibuat!` : `Group #${nextGroupNum} slot created successfully!`);
+      setNewSlotTourId('');
+      setNewSlotDate('');
+      loadAllData();
+    } catch (err) {
+      console.error("Error creating manual slot:", err);
+      showNotification('error', 'Error creating manual slot');
+    }
+  };
+
+  const handleViewManifest = async (slotItem: any) => {
+    setActiveManifestSlot(slotItem);
+    setLoadingManifest(true);
+    setManifestBookings([]);
+    try {
+      if (slotItem.bookingIds && slotItem.bookingIds.length > 0) {
+        const bookingsList: any[] = [];
+        const { query, where } = await import('firebase/firestore');
+        const bookingsRef = collection(db, 'bookings');
+        const q = query(bookingsRef, where('orderId', 'in', slotItem.bookingIds));
+        const bookingSnap = await getDocs(q);
+        bookingSnap.forEach(d => {
+          bookingsList.push({ id: d.id, ...d.data() });
+        });
+        setManifestBookings(bookingsList);
+      }
+    } catch (err) {
+      console.error("Error loading manifest bookings:", err);
+    } finally {
+      setLoadingManifest(false);
     }
   };
 
@@ -694,7 +795,8 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
             { id: 'activities', icon: ActivityIcon, label: lang === 'id' ? 'Aktivitas' : 'Activities' },
             { id: 'destinations', icon: MapPin, label: lang === 'id' ? 'Destinasi' : 'Destinations' },
             { id: 'vehicles', icon: Car, label: lang === 'id' ? 'Sewa Mobil' : 'Vehicles' },
-            { id: 'settings', icon: SettingsIcon, label: lang === 'id' ? 'Setelan' : 'Settings' }
+            { id: 'settings', icon: SettingsIcon, label: lang === 'id' ? 'Setelan' : 'Settings' },
+            { id: 'slots', icon: Layers, label: lang === 'id' ? 'Slot Grup' : 'Group Slots' }
           ].map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -762,6 +864,7 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
                         {activeTab === 'destinations' && destinationsList.length}
                         {activeTab === 'vehicles' && vehiclesList.length}
                         {activeTab === 'settings' && '1'}
+                        {activeTab === 'slots' && slotsList.length}
                       </span>
                     </h1>
                     <p className="text-xs text-slate-400">
@@ -770,10 +873,11 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
                       {activeTab === 'destinations' && (lang === 'id' ? 'Katalog objek wisata & tiket masuk Bali' : 'Manage island destinations and admission prices')}
                       {activeTab === 'vehicles' && (lang === 'id' ? 'Pengaturan armada sewa mobil & tarif transfer' : 'Manage cars, seating capacity, and driver transport rates')}
                       {activeTab === 'settings' && (lang === 'id' ? 'Kurs mata uang global dan biaya servis' : 'Set core parameters, markup ratios, and conversion rates')}
+                      {activeTab === 'slots' && (lang === 'id' ? 'Daftar slot rombongan tur, status keterisian, kuota, dan kontrol grup' : 'View group tour slots, manual override toggle, group quotas, and manifests')}
                     </p>
                   </div>
-
-                  {activeTab !== 'settings' && (
+ 
+                  {activeTab !== 'settings' && activeTab !== 'slots' && (
                     <button 
                       onClick={() => handleOpenForm(null, activeTab)}
                       className="py-3 px-5 bg-[#E87230] hover:bg-[#ff8643] text-white rounded-2xl font-bold font-sans text-xs flex items-center justify-center space-x-2 self-start transition-all hover:shadow-lg hover:shadow-[#E87230]/20"
@@ -1149,6 +1253,221 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
                             </button>
                           </div>
                         </form>
+                      </div>
+                    )}
+
+                    {/* GROUP TOUR SLOTS MANAGEMENT */}
+                    {activeTab === 'slots' && (
+                      <div className="space-y-6">
+                        {/* Manual Creation Card */}
+                        <div className="bg-slate-950 border border-white/5 rounded-3xl p-6 shadow-2xl">
+                          <h2 className="text-sm uppercase font-black text-slate-400 tracking-wider flex items-center space-x-2 mb-4">
+                            <Plus size={16} className="text-[#E87230]" />
+                            <span>{lang === 'id' ? 'Sistem Pembuat Slot Grup Manual' : 'Create Group Tour Slot Manually'}</span>
+                          </h2>
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div>
+                              <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1.5">{lang === 'id' ? 'Pilih Paket Tur' : 'Select Tour Package'}</label>
+                              <select
+                                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-3 text-xs text-white outline-none focus:border-[#E87230] cursor-pointer"
+                                value={newSlotTourId}
+                                onChange={(e) => setNewSlotTourId(e.target.value)}
+                              >
+                                <option value="">-- {lang === 'id' ? 'Pilih paket' : 'Choose tour'} --</option>
+                                {toursList.map(t => (
+                                  <option key={t.id} value={t.id}>{t.title}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1.5">{lang === 'id' ? 'Tanggal Perjalanan' : 'Travel Date'}</label>
+                              <input
+                                type="date"
+                                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-3 text-xs text-white outline-none focus:border-[#E87230]"
+                                value={newSlotDate}
+                                onChange={(e) => setNewSlotDate(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-slate-400 font-bold uppercase block mb-1.5">{lang === 'id' ? 'Tarif per Rombongan (IDR)' : 'Price per Pax (IDR)'}</label>
+                              <input
+                                type="number"
+                                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-3 text-xs text-white outline-none focus:border-[#E87230] font-mono"
+                                placeholder="720000"
+                                value={newSlotPrice}
+                                onChange={(e) => setNewSlotPrice(Number(e.target.value))}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleCreateSlotManually}
+                              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-[#0f172a] font-black rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer"
+                            >
+                              ✨ {lang === 'id' ? 'Buka Grup Baru' : 'Open Group Slot'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Slots Database List */}
+                        <div className="bg-slate-950 border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-slate-900/60 border-b border-white/5 text-slate-400 font-bold">
+                                  <th className="p-4">{lang === 'id' ? 'Nama Tur' : 'Tour Package'}</th>
+                                  <th className="p-4">{lang === 'id' ? 'Tanggal' : 'Date'}</th>
+                                  <th className="p-4">{lang === 'id' ? 'Nomor Grup' : 'Group No.'}</th>
+                                  <th className="p-4">{lang === 'id' ? 'Kapasitas' : 'Occupancy'}</th>
+                                  <th className="p-4">{lang === 'id' ? 'Harga' : 'Price'}</th>
+                                  <th className="p-4">{lang === 'id' ? 'Status' : 'Status'}</th>
+                                  <th className="p-4 text-right w-44">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5">
+                                {slotsList.map((slotItem) => {
+                                  const matchingTour = toursList.find(t => t.id === slotItem.tourId);
+                                  const tourTitle = matchingTour ? matchingTour.title : slotItem.tourId;
+                                  const isFull = slotItem.status === 'full';
+                                  return (
+                                    <tr key={slotItem.id} className="hover:bg-white/[0.01] transition-all">
+                                      <td className="p-4 font-bold max-w-xs truncate">{tourTitle}</td>
+                                      <td className="p-4 font-mono font-medium">{slotItem.date}</td>
+                                      <td className="p-4">
+                                        <span className="bg-slate-800 text-slate-200 px-2 py-0.5 rounded-lg border border-white/5 font-mono text-[10px]">
+                                          Grup #{slotItem.groupNumber}
+                                        </span>
+                                      </td>
+                                      <td className="p-4">
+                                        <div className="flex items-center space-x-2">
+                                          <div className="w-16 bg-slate-800 h-2 rounded-full overflow-hidden">
+                                            <div 
+                                              className={`h-full ${isFull ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                              style={{ width: `${Math.min(100, (slotItem.participants / 7) * 100)}%` }}
+                                            />
+                                          </div>
+                                          <span className="font-mono font-bold text-slate-300">
+                                            {slotItem.participants}/7
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td className="p-4 font-mono text-emerald-400 font-bold">
+                                        IDR {slotItem.pricePerPerson?.toLocaleString()}
+                                      </td>
+                                      <td className="p-4">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                          isFull 
+                                            ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                                            : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                        }`}>
+                                          {slotItem.status}
+                                        </span>
+                                      </td>
+                                      <td className="p-4 text-right">
+                                        <div className="flex items-center justify-end space-x-2">
+                                          <button
+                                            onClick={() => handleToggleSlotStatus(slotItem.id, slotItem.status)}
+                                            className={`px-2.5 py-1.5 text-[10px] font-black uppercase rounded-lg border cursor-pointer transition-all ${
+                                              isFull 
+                                                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20' 
+                                                : 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20'
+                                            }`}
+                                          >
+                                            {isFull ? (lang === 'id' ? 'Aktifkan' : 'Reopen') : (lang === 'id' ? 'Tutup' : 'Force Full')}
+                                          </button>
+                                          
+                                          <button
+                                            onClick={() => handleViewManifest(slotItem)}
+                                            className="px-2.5 py-1.5 text-[10px] font-bold uppercase rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 cursor-pointer"
+                                          >
+                                            👥 Manifest ({slotItem.bookingIds?.length || 0})
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {slotsList.length === 0 && (
+                                  <tr>
+                                    <td colSpan={7} className="p-12 text-center text-slate-500 italic">
+                                      {lang === 'id' ? 'Tidak ada slot rombongan tur aktif di database.' : 'No active group slots matching date rules.'}
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Interactive Manifest Floating/Section Card */}
+                        {activeManifestSlot && (
+                          <div className="bg-slate-950 border border-[#E87230]/40 rounded-3xl p-6 shadow-[0_10px_40px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex items-start justify-between border-b border-white/5 pb-3.5 mb-4">
+                              <div>
+                                <h3 className="font-black text-base text-white tracking-tight flex items-center gap-2">
+                                  <span>👥 {lang === 'id' ? 'Daftar Manifest Pelanggan' : 'Customer Roster Manifest'}</span>
+                                  <span className="text-xs font-mono px-2 py-0.5 bg-[#E87230]/20 text-[#E87230] rounded-full">
+                                    Grup #{activeManifestSlot.groupNumber}
+                                  </span>
+                                </h3>
+                                <p className="text-xs text-slate-400 mt-1">
+                                  {lang === 'id' ? 'Konfirmasi manifest pemesanan terikat grup ini dengan database' : 'Real-time verified traveler entries linked to current slot segment'}
+                                </p>
+                              </div>
+                              <button 
+                                onClick={() => setActiveManifestSlot(null)}
+                                className="p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 rounded-lg cursor-pointer"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+
+                            {loadingManifest ? (
+                              <div className="flex items-center justify-center py-8 space-x-2 text-xs text-slate-400">
+                                <RefreshCw className="animate-spin text-[#E87230]" size={16} />
+                                <span>{lang === 'id' ? 'Memverifikasi manifest grup...' : 'Validating database manifests...'}</span>
+                              </div>
+                            ) : manifestBookings.length === 0 ? (
+                              <p className="text-xs text-center text-slate-500 italic py-6">
+                                {lang === 'id' ? 'Belum ada transaksi pembayaran untuk grup ini' : 'No paid traveler transactions linked to this slot.'}
+                              </p>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs border-collapse">
+                                  <thead>
+                                    <tr className="bg-slate-900 border-b border-white/5 text-slate-400 font-bold font-mono">
+                                      <th className="p-3">Order ID</th>
+                                      <th className="p-3">{lang === 'id' ? 'Nama Pelanggan' : 'Full Name'}</th>
+                                      <th className="p-3">{lang === 'id' ? 'Kontak' : 'Contact'}</th>
+                                      <th className="p-3">Email</th>
+                                      <th className="p-3">{lang === 'id' ? 'Jumlah Orang' : 'Travelers'}</th>
+                                      <th className="p-3">{lang === 'id' ? 'Pembayaran' : 'Payment Status'}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-white/5">
+                                    {manifestBookings.map((bk) => (
+                                      <tr key={bk.id} className="hover:bg-white/[0.01]">
+                                        <td className="p-3 font-mono text-[#E87230] font-bold">{bk.orderId}</td>
+                                        <td className="p-3 font-bold text-white">{bk.customerName}</td>
+                                        <td className="p-3 text-slate-300 font-medium">{bk.customerPhone}</td>
+                                        <td className="p-3 text-slate-400 font-mono font-semibold">{bk.customerEmail}</td>
+                                        <td className="p-3 font-mono text-center font-black text-indigo-400">{bk.travelers} Pax</td>
+                                        <td className="p-3">
+                                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                                            bk.paymentStatus === 'settlement' || bk.paymentStatus === 'success'
+                                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                                              : 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                                          }`}>
+                                            {bk.paymentStatus}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </>

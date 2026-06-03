@@ -1,10 +1,10 @@
 {
-  "projectId": "freesiatour-4a564",
-  "appId": "1:96331863560:web:da82fbd59e1d8c023363bd",
-  "apiKey": "AIzaSyCK38lP5Yf9HIlEu6fx1XBtLn8KtVHDvXs",
-  "authDomain": "freesiatour-4a564.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
-  "storageBucket": "freesiatour-4a564.firebasestorage.app",
-  "messagingSenderId": "96331863560",
-  "measurementId": "G-CX2PJQYK23"
+  "projectId": "gen-lang-client-0494196061",
+  "appId": "1:261832078442:web:6b117219915c41a8b0c613",
+  "apiKey": "AIzaSyAcYKTuy9qdKl_-3DZ7bcd-Z0bq8mGqhfU",
+  "authDomain": "gen-lang-client-0494196061.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-6ddc127b-5b42-47ec-98dd-71f6948fa520",
+  "storageBucket": "gen-lang-client-0494196061.firebasestorage.app",
+  "messagingSenderId": "261832078442",
+  "measurementId": ""
 }
