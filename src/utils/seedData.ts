@@ -4,6 +4,10 @@ import { DESTINATIONS } from '../constants';
 import { ACTIVITIES, CALCULATOR_DESTINATIONS, VEHICLES_DATA } from '../calculatorData';
 
 export async function seedFreesiaData() {
+  return seedFirestore();
+}
+
+export async function seedFirestore() {
   console.log('Starting Freesiatour data seeding...');
   
   const summary = {

@@ -44,7 +44,7 @@ import {
 } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import { Tour, Activity, Destination, Vehicle, Settings } from '../services/firebaseService';
-import { seedFreesiaData } from '../utils/seedData';
+import { seedFreesiaData, seedFirestore } from '../utils/seedData';
 
 // Ensure our error helper matches the guidelines
 enum OperationType {
@@ -112,6 +112,9 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
   // Seeding states
   const [seeding, setSeeding] = useState<boolean>(false);
   const [seeded, setSeeded] = useState<boolean>(false);
+  const [seedStatus, setSeedStatus] = useState<
+    'idle' | 'loading' | 'done' | 'error'
+  >('idle');
 
   // Slots management states
   const [manifestBookings, setManifestBookings] = useState<any[]>([]);
@@ -194,6 +197,19 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
       loadAllData();
     }
   }, [user, isAdmin]);
+
+  const handleSeed = async () => {
+    setSeedStatus('loading');
+    try {
+      const result = await seedFirestore();
+      console.log('Seed result:', result);
+      setSeedStatus('done');
+      await loadAllData();
+    } catch (error) {
+      console.error('Seed error:', error);
+      setSeedStatus('error');
+    }
+  };
 
   const handleSeedData = async () => {
     setSeeding(true);
@@ -795,6 +811,23 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
 
         {/* User Badge / Actions */}
         <div className="flex items-center space-x-4">
+          <button
+            onClick={handleSeed}
+            disabled={seedStatus === 'loading' || seedStatus === 'done'}
+            className={`py-2 px-3 border rounded-xl font-bold font-sans text-xs transition-colors flex items-center space-x-1.5 ${
+              seedStatus === 'done'
+                ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/20 cursor-not-allowed'
+                : seedStatus === 'loading'
+                  ? 'bg-slate-800 text-slate-400 border-white/5 cursor-wait'
+                  : 'bg-white/5 hover:bg-emerald-500/10 text-slate-200 border-white/10 hover:border-emerald-500/30'
+            }`}
+          >
+            {seedStatus === 'idle' && <span>🌱 Seed Data</span>}
+            {seedStatus === 'loading' && <span>⏳ Seeding...</span>}
+            {seedStatus === 'done' && <span>✅ Seeded</span>}
+            {seedStatus === 'error' && <span>❌ Error - Try Again</span>}
+          </button>
+
           <div className="hidden sm:flex flex-col items-end">
             <span className="text-xs font-bold text-white">{user.displayName || 'Admin'}</span>
             <span className="text-[9px] font-mono text-[#E87230]">MASTER ADMIN</span>
