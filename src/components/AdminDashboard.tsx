@@ -44,6 +44,7 @@ import {
 } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import { Tour, Activity, Destination, Vehicle, Settings } from '../services/firebaseService';
+import { seedFreesiaData } from '../utils/seedData';
 
 // Ensure our error helper matches the guidelines
 enum OperationType {
@@ -107,6 +108,10 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
   const [slotsList, setSlotsList] = useState<any[]>([]);
   const [settingsData, setSettingsData] = useState<Settings | null>(null);
   const [dataLoading, setDataLoading] = useState<boolean>(false);
+
+  // Seeding states
+  const [seeding, setSeeding] = useState<boolean>(false);
+  const [seeded, setSeeded] = useState<boolean>(false);
 
   // Slots management states
   const [manifestBookings, setManifestBookings] = useState<any[]>([]);
@@ -189,6 +194,24 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
       loadAllData();
     }
   }, [user, isAdmin]);
+
+  const handleSeedData = async () => {
+    setSeeding(true);
+    try {
+      const summary = await seedFreesiaData();
+      setSeeded(true);
+      showNotification('success', lang === 'id' 
+        ? `Sukses mengisi data! Tours: ${summary.tours}, Activities: ${summary.activities}, Destinations: ${summary.destinations}, Vehicles: ${summary.vehicles}`
+        : `Database seeded successfully! Tours: ${summary.tours}, Activities: ${summary.activities}, Destinations: ${summary.destinations}, Vehicles: ${summary.vehicles}`
+      );
+      await loadAllData();
+    } catch (err) {
+      console.error('Seeding error:', err);
+      showNotification('error', lang === 'id' ? 'Gagal mengisi data dasar.' : 'Failed to seed basic directory data.');
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const loadAllData = async () => {
     setDataLoading(true);
@@ -877,15 +900,39 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
                     </p>
                   </div>
  
-                  {activeTab !== 'settings' && activeTab !== 'slots' && (
-                    <button 
-                      onClick={() => handleOpenForm(null, activeTab)}
-                      className="py-3 px-5 bg-[#E87230] hover:bg-[#ff8643] text-white rounded-2xl font-bold font-sans text-xs flex items-center justify-center space-x-2 self-start transition-all hover:shadow-lg hover:shadow-[#E87230]/20"
+                  <div className="flex flex-wrap items-center gap-3 self-start">
+                    {/* Seed Data Button */}
+                    <button
+                      onClick={handleSeedData}
+                      disabled={seeding || seeded}
+                      className={`py-3 px-5 rounded-2xl font-bold font-sans text-xs flex items-center justify-center space-x-2 transition-all border ${
+                        seeded 
+                          ? 'bg-slate-900 text-slate-400 border-white/5 opacity-80 cursor-not-allowed'
+                          : seeding
+                            ? 'bg-slate-800 text-slate-300 border-white/10 cursor-wait'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white border-transparent hover:shadow-lg hover:shadow-emerald-600/20'
+                      }`}
                     >
-                      <Plus size={16} />
-                      <span>{lang === 'id' ? 'Tambah Baru' : 'Add New'}</span>
+                      <RefreshCw size={14} className={seeding ? 'animate-spin' : ''} />
+                      <span>
+                        {seeding 
+                          ? (lang === 'id' ? 'Mengisi Data...' : 'Seeding...') 
+                          : seeded 
+                            ? (lang === 'id' ? '✅ Berhasil Diisi' : '✅ Seeded')
+                            : (lang === 'id' ? 'Seed Data' : 'Seed Data')}
+                      </span>
                     </button>
-                  )}
+
+                    {activeTab !== 'settings' && activeTab !== 'slots' && (
+                      <button 
+                        onClick={() => handleOpenForm(null, activeTab)}
+                        className="py-3 px-5 bg-[#E87230] hover:bg-[#ff8643] text-white rounded-2xl font-bold font-sans text-xs flex items-center justify-center space-x-2 transition-all hover:shadow-lg hover:shadow-[#E87230]/20"
+                      >
+                        <Plus size={16} />
+                        <span>{lang === 'id' ? 'Tambah Baru' : 'Add New'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* DB Loader */}
