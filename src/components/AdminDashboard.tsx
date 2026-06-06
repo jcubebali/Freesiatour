@@ -217,8 +217,8 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
       const summary = await seedFreesiaData();
       setSeeded(true);
       showNotification('success', lang === 'id' 
-        ? `Sukses mengisi data! Tours: ${summary.tours}, Activities: ${summary.activities}, Destinations: ${summary.destinations}, Vehicles: ${summary.vehicles}`
-        : `Database seeded successfully! Tours: ${summary.tours}, Activities: ${summary.activities}, Destinations: ${summary.destinations}, Vehicles: ${summary.vehicles}`
+        ? `Sukses mengisi data! Tours: ${summary.tours}, Activities: ${summary.activities}, Destinations: ${summary.destinations}, Vehicles: ${summary.vehicles}, Settings: ${summary.settings || 0}`
+        : `Database seeded successfully! Tours: ${summary.tours}, Activities: ${summary.activities}, Destinations: ${summary.destinations}, Vehicles: ${summary.vehicles}, Settings: ${summary.settings || 0}`
       );
       await loadAllData();
     } catch (err) {
@@ -231,39 +231,60 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
 
   const loadAllData = async () => {
     setDataLoading(true);
+    
+    // Tours
     try {
-      // Tours
       const toursSnap = await getDocs(collection(db, 'tours'));
       const fetchedTours: Tour[] = [];
       toursSnap.forEach(d => fetchedTours.push({ id: d.id, ...d.data() } as Tour));
       setToursList(fetchedTours);
+    } catch (err) {
+      console.error("Error loading tours: ", err);
+    }
 
-      // Activities
+    // Activities
+    try {
       const activitiesSnap = await getDocs(collection(db, 'activities'));
       const fetchedActivities: Activity[] = [];
       activitiesSnap.forEach(d => fetchedActivities.push({ id: d.id, ...d.data() } as Activity));
       setActivitiesList(fetchedActivities);
+    } catch (err) {
+      console.error("Error loading activities: ", err);
+    }
 
-      // Destinations
+    // Destinations
+    try {
       const destinationsSnap = await getDocs(collection(db, 'destinations'));
       const fetchedDestinations: Destination[] = [];
       destinationsSnap.forEach(d => fetchedDestinations.push({ id: d.id, ...d.data() } as Destination));
       setDestinationsList(fetchedDestinations);
+    } catch (err) {
+      console.error("Error loading destinations: ", err);
+    }
 
-      // Vehicles
+    // Vehicles
+    try {
       const vehiclesSnap = await getDocs(collection(db, 'vehicles'));
       const fetchedVehicles: Vehicle[] = [];
       vehiclesSnap.forEach(d => fetchedVehicles.push({ id: d.id, ...d.data() } as Vehicle));
       setVehiclesList(fetchedVehicles);
+    } catch (err) {
+      console.error("Error loading vehicles: ", err);
+    }
 
-      // Tour Slots
+    // Tour Slots
+    try {
       const slotsSnap = await getDocs(collection(db, 'tour_slots'));
       const fetchedSlots: any[] = [];
       slotsSnap.forEach(d => fetchedSlots.push({ id: d.id, ...d.data() }));
       fetchedSlots.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
       setSlotsList(fetchedSlots);
+    } catch (err) {
+      console.error("Error loading tour slots: ", err);
+    }
 
-      // Settings
+    // Settings
+    try {
       const settingsSnap = await getDocs(collection(db, 'settings'));
       if (!settingsSnap.empty) {
         const sDoc = settingsSnap.docs[0];
@@ -296,11 +317,21 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
         }
       }
     } catch (err) {
-      console.error("Error loading admin lists: ", err);
-      showNotification('error', 'Error loading Firestore data');
-    } finally {
-      setDataLoading(false);
+      console.error("Error loading settings: ", err);
+      // Double check if there's any backup settings offline
+      if (!settingsData) {
+        setSettingsData({
+          id: 'global',
+          markupPercentage: 10,
+          domesticDiscountPercentage: 15,
+          exchangeRate: 16000,
+          mealPriceIdr: 50000,
+          tourServiceFeeIdr: 100000
+        });
+      }
     }
+
+    setDataLoading(false);
   };
 
   const handleToggleSlotStatus = async (slotId: string, currentStatus: string) => {

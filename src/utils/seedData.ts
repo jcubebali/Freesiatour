@@ -15,7 +15,26 @@ export async function seedFirestore() {
     activities: 0,
     destinations: 0,
     vehicles: 0,
+    settings: 0,
   };
+
+  // Seed default settings first
+  try {
+    const settingsRef = doc(db, 'settings', 'global');
+    await setDoc(settingsRef, {
+      id: 'global',
+      markupPercentage: 10,
+      domesticDiscountPercentage: 15,
+      exchangeRate: 16000,
+      mealPriceIdr: 50000,
+      tourServiceFeeIdr: 100000
+    }, { merge: true });
+    summary.settings = 1;
+    console.log('Seeded settings successfully.');
+  } catch (err) {
+    console.error('Error seeding global settings:', err);
+    throw err; // Crucial settings shouldn't fail silently
+  }
 
   // Seed tours
   for (const item of DESTINATIONS) {
