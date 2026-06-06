@@ -3156,7 +3156,19 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
       
       if ((window as any).snap) {
         (window as any).snap.pay(data.token, {
-          onSuccess: function(result: any){
+          onSuccess: async function(result: any){
+            try {
+              const { doc, setDoc } = await import('firebase/firestore');
+              await setDoc(doc(db, 'bookings', orderId), {
+                ...bookingData,
+                status: 'paid',
+                paymentStatus: 'paid',
+                paymentResult: result,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            } catch (fsErr) {
+              console.error("Error saving/updating booking on payment success:", fsErr);
+            }
             setIsSubmitting(false);
             setSuccessBookingInfo({
               groupNumber: successGroupNum,
@@ -3165,7 +3177,19 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
             });
             setIsSuccess(true);
           },
-          onPending: function(result: any){
+          onPending: async function(result: any){
+            try {
+              const { doc, setDoc } = await import('firebase/firestore');
+              await setDoc(doc(db, 'bookings', orderId), {
+                ...bookingData,
+                status: 'pending',
+                paymentStatus: 'pending',
+                paymentResult: result,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            } catch (fsErr) {
+              console.error("Error saving/updating booking on payment pending:", fsErr);
+            }
             setIsSubmitting(false);
             setSuccessBookingInfo({
               groupNumber: successGroupNum,
