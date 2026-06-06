@@ -3158,6 +3158,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
         (window as any).snap.pay(data.token, {
           onSuccess: async function(result: any){
             try {
+              const { db } = await import('./firebase');
               const { doc, setDoc } = await import('firebase/firestore');
               await setDoc(doc(db, 'bookings', orderId), {
                 ...bookingData,
@@ -3179,6 +3180,7 @@ function BookingScreen({ tour, onBack, onSuccess, onTermsClick, currency, lang }
           },
           onPending: async function(result: any){
             try {
+              const { db } = await import('./firebase');
               const { doc, setDoc } = await import('firebase/firestore');
               await setDoc(doc(db, 'bookings', orderId), {
                 ...bookingData,
