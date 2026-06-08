@@ -153,7 +153,7 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
       setUser(currentUser);
       if (currentUser) {
         // Bootstrap admin: email jcube.bali@gmail.com is absolute admin.
-        const isUserAdmin = currentUser.email === 'jcube.bali@gmail.com' || currentUser.email === 'john.doe@example.com';
+        const isUserAdmin = currentUser.email === 'jcube.bali@gmail.com' || currentUser.email === 'freesiatour.id@gmail.com';
         setIsAdmin(isUserAdmin);
         
         if (isUserAdmin) {
@@ -175,7 +175,7 @@ export default function AdminDashboard({ onBack, lang, onSettingsUpdated }: Admi
       .then((result) => {
         if (result?.user) {
           setUser(result.user);
-          const isUserAdmin = result.user.email === 'jcube.bali@gmail.com' || result.user.email === 'john.doe@example.com';
+          const isUserAdmin = result.user.email === 'jcube.bali@gmail.com' || result.user.email === 'freesiatour.id@gmail.com';
           setIsAdmin(isUserAdmin);
           if (isUserAdmin) {
             showNotification('success', lang === 'id' ? 'Selamat datang Admin!' : 'Welcome back Admin!');
